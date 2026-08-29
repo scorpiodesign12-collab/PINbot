@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>PinShare — задания за монеты</title>
+<meta name="description" content="PinShare — платформа взаимных заданий для Pinterest. Выполняй задания, зарабатывай монеты, продвигай свои пины." />
+
+<!-- Telegram Mini App SDK (если открыто вне Telegram — приложение работает в демо-режиме) -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+/* =====================================================================
+   PinShare — design tokens
+===================================================================== */
+:root {
+  --bg: #eef2fb;
+  --bg-grad: radial-gradient(120% 60% at 50% 0%, #f6f9ff 0%, #eaf0fc 45%, #e3eafc 100%);
+  --surface: #ffffff;
+  --surface-soft: #f3f6fc;
+  --surface-line: #e6ebf7;
+
+  --ink: #12141f;
+  --ink-soft: #565d78;
+  --muted: #9298b0;
+
+  --accent-300: #8fb0ff;
+  --accent-400: #5c86fb;
+  --accent-500: #3b6cf6;
+  --accent-600: #2f5adf;
+  --accent-700: #2647b3;
+  --accent-grad: linear-gradient(135deg, #5583ff 0%, #2f57e0 100%);
+  --accent-grad-deep: linear-gradient(160deg, #3d6bf6 0%, #1f3d9e 120%);
+  --accent-soft: #e8effe;
+  --accent-soft-2: #dbe6ff;
+
+  --success: #22b573;
+  --success-soft: #e2f8ee;
+  --danger: #ef4d4d;
+  --danger-soft: #fdeaea;
+  --warning: #f5a623;
+  --warning-soft: #fff3de;
+
+  --radius-xl: 26px;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 10px 26px rgba(35, 66, 165, 0.08);
+  --shadow-card-strong: 0 16px 40px rgba(29, 60, 158, 0.16);
+  --shadow-btn: 0 10px 22px rgba(47, 90, 224, 0.32);
+  --shadow-nav: 0 -8px 30px rgba(30, 55, 130, 0.08);
+
+  --font-display: "Unbounded", "Inter", sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --header-h: 60px;
+  --nav-h: 76px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--bg-grad);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+body { min-height: 100vh; }
+button { font-family: inherit; border: none; background: none; cursor: pointer; color: inherit; }
+input, textarea, select { font-family: inherit; font-size: 15px; }
+::-webkit-scrollbar { width: 0; height: 0; }
+img { -webkit-user-drag: none; user-select: none; }
+.hidden { display: none !important; }
+
+#app {
+  position: relative; min-height: 100vh; max-width: 560px; margin: 0 auto;
+  padding-top: calc(var(--header-h) + var(--safe-top));
+  padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 10px);
+}
+
+.app-header {
+  position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 560px;
+  height: calc(var(--header-h) + var(--safe-top));
+  padding-top: var(--safe-top);
+  display: flex; align-items: center; justify-content: space-between;
+  padding-left: 18px; padding-right: 18px;
+  background: rgba(238, 242, 251, 0.82);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  z-index: 40; border-bottom: 1px solid rgba(230, 235, 247, 0.9);
+}
+.header-title { font-family: var(--font-display); font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.header-back {
+  position: absolute; left: 10px; top: calc(50% + var(--safe-top) / 2); transform: translateY(-50%);
+  width: 34px; height: 34px; border-radius: var(--radius-pill);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink); background: var(--surface); box-shadow: var(--shadow-card);
+}
+.header-balance {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--surface); padding: 7px 12px; border-radius: var(--radius-pill);
+  font-weight: 700; font-size: 13.5px; box-shadow: var(--shadow-card); font-family: var(--font-display);
+}
+.header-balance__icon { font-size: 14px; }
+
+.app-content { padding: 14px 16px 8px; opacity: 0; transform: translateY(6px); }
+.app-content.page-enter { animation: pageEnter 0.32s cubic-bezier(.2,.7,.3,1) forwards; }
+@keyframes pageEnter { to { opacity: 1; transform: translateY(0); } }
+
+.bottom-nav {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 560px; height: calc(var(--nav-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-nav);
+  display: flex; align-items: center; justify-content: space-around;
+  z-index: 40; border-top: 1px solid var(--surface-line);
+}
+.nav-item {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  color: var(--muted); font-size: 10.5px; font-weight: 600; padding: 6px 8px;
+  border-radius: var(--radius-md); transition: color 0.2s ease, transform 0.15s ease; flex: 1;
+}
+.nav-item svg { width: 23px; height: 23px; transition: transform 0.2s ease; }
+.nav-item:active { transform: scale(0.9); }
+.nav-item--active { color: var(--accent-600); }
+.nav-item--active svg { transform: translateY(-1px); }
+.nav-item--clicker .nav-clicker-coin { font-size: 27px; line-height: 1; transform: translateY(-2px); filter: drop-shadow(0 4px 8px rgba(245, 166, 35, 0.35)); }
+.nav-item--clicker.nav-item--active .nav-clicker-coin { transform: translateY(-4px) scale(1.08); }
+
+.fab {
+  position: fixed; right: 20px; bottom: calc(var(--nav-h) + var(--safe-bottom) + 16px);
+  width: 54px; height: 54px; border-radius: var(--radius-pill);
+  background: var(--accent-grad); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-btn); z-index: 39; transition: transform 0.15s ease;
+}
+.fab:active { transform: scale(0.92); }
+
+.h1 { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; }
+.h2 { font-family: var(--font-display); font-size: 17px; font-weight: 600; margin: 0; }
+.text-muted { color: var(--muted); }
+.text-soft { color: var(--ink-soft); }
+
+.section-title { display: flex; align-items: center; justify-content: space-between; margin: 22px 0 12px; }
+.section-title .h2 { font-size: 16px; }
+.section-title a, .link-btn { font-size: 13px; font-weight: 600; color: var(--accent-600); }
+
+.card { background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); padding: 18px; }
+
+.balance-card {
+  position: relative; border-radius: var(--radius-xl); padding: 22px 20px;
+  background: var(--accent-grad-deep); color: #fff; overflow: hidden;
+  box-shadow: 0 18px 34px rgba(31, 62, 158, 0.34);
+}
+.balance-card::before { content: ""; position: absolute; width: 220px; height: 220px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,0.16), transparent 70%); top: -90px; right: -60px; }
+.balance-card::after { content: ""; position: absolute; width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,0.10), transparent 70%); bottom: -80px; left: -40px; }
+.balance-card__label { font-size: 13px; opacity: 0.82; font-weight: 500; position: relative; }
+.balance-card__value { position: relative; font-family: var(--font-display); font-size: 40px; font-weight: 700; margin: 4px 0 16px; display: flex; align-items: baseline; gap: 8px; letter-spacing: -0.02em; }
+.balance-card__value .coin-icon { font-size: 28px; }
+.balance-card__row { position: relative; display: flex; gap: 10px; }
+.balance-pill { flex: 1; background: rgba(255,255,255,0.14); border-radius: var(--radius-md); padding: 10px 12px; backdrop-filter: blur(6px); }
+.balance-pill__num { font-family: var(--font-display); font-size: 16px; font-weight: 700; }
+.balance-pill__label { font-size: 11px; opacity: 0.8; margin-top: 2px; }
+
+.quick-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+.quick-action { background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow-card); padding: 14px 6px; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); transition: transform 0.15s ease; }
+.quick-action:active { transform: scale(0.94); }
+.quick-action__icon { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; background: var(--accent-soft); color: var(--accent-600); }
+
+.task-card { background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); padding: 16px; margin-bottom: 12px; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.task-card:active { transform: scale(0.985); }
+.task-card__top { display: flex; align-items: flex-start; gap: 12px; }
+.task-card__icon { width: 44px; height: 44px; border-radius: 13px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.task-card__body { flex: 1; min-width: 0; }
+.task-card__category { font-size: 11.5px; font-weight: 700; color: var(--accent-600); text-transform: uppercase; letter-spacing: 0.02em; }
+.task-card__title { font-size: 15px; font-weight: 700; margin: 2px 0 3px; line-height: 1.3; }
+.task-card__desc { font-size: 13px; color: var(--ink-soft); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.task-card__bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+.task-card__meta { display: flex; align-items: center; gap: 8px; }
+.reward-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--success-soft); color: var(--success); font-weight: 700; font-size: 13px; padding: 6px 10px; border-radius: var(--radius-pill); }
+.slots-chip { font-size: 12px; color: var(--muted); font-weight: 600; }
+.status-chip { font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: var(--radius-pill); }
+.status-chip--pending { background: var(--warning-soft); color: #b57200; }
+.status-chip--approved { background: var(--success-soft); color: var(--success); }
+.status-chip--rejected { background: var(--danger-soft); color: var(--danger); }
+.status-chip--active { background: var(--accent-soft); color: var(--accent-600); }
+.status-chip--completed { background: var(--surface-soft); color: var(--muted); }
+.status-chip--cancelled { background: var(--surface-soft); color: var(--muted); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: var(--radius-pill); padding: 12px 18px; font-weight: 700; font-size: 14.5px; transition: transform 0.14s ease, opacity 0.14s ease, box-shadow 0.14s ease; white-space: nowrap; }
+.btn:active { transform: scale(0.96); }
+.btn:disabled { opacity: 0.45; pointer-events: none; }
+.btn-block { width: 100%; }
+.btn-primary { background: var(--accent-grad); color: #fff; box-shadow: var(--shadow-btn); }
+.btn-secondary { background: var(--accent-soft); color: var(--accent-600); }
+.btn-ghost { background: var(--surface-soft); color: var(--ink-soft); }
+.btn-danger { background: var(--danger-soft); color: var(--danger); }
+.btn-success { background: var(--success-soft); color: var(--success); }
+.btn-sm { padding: 8px 14px; font-size: 13px; }
+
+.chip-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin: 0 -16px 4px; padding-left: 16px; padding-right: 16px; }
+.chip-scroll::-webkit-scrollbar { display: none; }
+.filter-chip { flex-shrink: 0; display: flex; align-items: center; gap: 6px; background: var(--surface); color: var(--ink-soft); font-weight: 600; font-size: 13px; padding: 9px 14px; border-radius: var(--radius-pill); box-shadow: var(--shadow-card); transition: all 0.16s ease; }
+.filter-chip--active { background: var(--accent-grad); color: #fff; box-shadow: var(--shadow-btn); }
+
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 13px; font-weight: 700; color: var(--ink-soft); margin-bottom: 7px; }
+.field input, .field textarea { width: 100%; border: 1.5px solid var(--surface-line); background: var(--surface); border-radius: var(--radius-md); padding: 13px 14px; font-size: 14.5px; color: var(--ink); outline: none; transition: border-color 0.15s ease; }
+.field input:focus, .field textarea:focus { border-color: var(--accent-400); }
+.field textarea { resize: vertical; min-height: 84px; line-height: 1.4; }
+.field-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.field-hint--error { color: var(--danger); font-weight: 600; }
+.field-row { display: flex; gap: 12px; }
+.field-row .field { flex: 1; }
+.category-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+.category-picker .filter-chip { flex-shrink: 0; }
+
+.cost-summary { background: var(--surface-soft); border-radius: var(--radius-md); padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.cost-summary__label { font-size: 13px; color: var(--ink-soft); font-weight: 600; }
+.cost-summary__value { font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--accent-600); }
+.cost-summary__value.insufficient { color: var(--danger); }
+
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.stat-box { background: var(--surface); border-radius: var(--radius-md); padding: 14px; box-shadow: var(--shadow-card); }
+.stat-box__value { font-family: var(--font-display); font-size: 20px; font-weight: 700; }
+.stat-box__label { font-size: 12px; color: var(--muted); margin-top: 3px; font-weight: 600; }
+
+.profile-header { display: flex; align-items: center; gap: 14px; padding: 6px 2px 4px; }
+.avatar { width: 62px; height: 62px; border-radius: 50%; object-fit: cover; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 22px; color: var(--accent-600); flex-shrink: 0; box-shadow: var(--shadow-card); }
+.profile-name { font-family: var(--font-display); font-size: 18px; font-weight: 700; }
+.profile-username { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+.tabs { display: flex; background: var(--surface-soft); border-radius: var(--radius-pill); padding: 4px; margin: 18px 0 14px; }
+.tab { flex: 1; text-align: center; padding: 9px 8px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 700; color: var(--ink-soft); transition: all 0.16s ease; }
+.tab--active { background: var(--surface); color: var(--accent-600); box-shadow: var(--shadow-card); }
+
+.empty-state { text-align: center; padding: 52px 24px; color: var(--muted); }
+.empty-state__icon { font-size: 40px; margin-bottom: 10px; }
+.empty-state__title { font-family: var(--font-display); font-weight: 600; font-size: 15px; color: var(--ink-soft); margin-bottom: 4px; }
+.empty-state__text { font-size: 13px; line-height: 1.5; }
+
+.page-loader { display: flex; align-items: center; justify-content: center; padding: 80px 0; }
+.spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--surface-line); border-top-color: var(--accent-500); animation: spin 0.75s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.skeleton { background: linear-gradient(90deg, var(--surface-soft) 25%, #eaf0fc 37%, var(--surface-soft) 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; border-radius: var(--radius-md); }
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+.sheet-overlay { position: fixed; inset: 0; background: rgba(15, 22, 45, 0.44); z-index: 60; display: flex; align-items: flex-end; justify-content: center; opacity: 0; transition: opacity 0.22s ease; }
+.sheet-overlay.sheet-overlay--visible { opacity: 1; }
+.sheet { width: 100%; max-width: 560px; background: var(--surface); border-radius: 26px 26px 0 0; padding: 10px 20px calc(24px + var(--safe-bottom)); max-height: 86vh; overflow-y: auto; transform: translateY(100%); transition: transform 0.28s cubic-bezier(.2,.8,.3,1); }
+.sheet-overlay--visible .sheet { transform: translateY(0); }
+.sheet__handle { width: 40px; height: 4px; border-radius: 3px; background: var(--surface-line); margin: 6px auto 14px; }
+
+.toast-container { position: fixed; top: calc(var(--safe-top) + 68px); left: 50%; transform: translateX(-50%); z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; width: 100%; max-width: 520px; padding: 0 20px; pointer-events: none; }
+.toast { background: var(--ink); color: #fff; font-size: 13.5px; font-weight: 600; padding: 11px 18px; border-radius: var(--radius-pill); box-shadow: 0 10px 26px rgba(0,0,0,0.22); opacity: 0; transform: translateY(-10px); transition: all 0.25s ease; max-width: 100%; text-align: center; }
+.toast--visible { opacity: 1; transform: translateY(0); }
+.toast--success { background: var(--success); }
+.toast--error { background: var(--danger); }
+
+.coin-particle { position: fixed; font-size: 18px; pointer-events: none; z-index: 200; animation: coinFly 0.85s cubic-bezier(.15,.7,.3,1) forwards; }
+@keyframes coinFly { 0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4) rotate(0deg); } 60% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1) rotate(160deg); } }
+.coin-float-label { position: fixed; font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--accent-600); pointer-events: none; z-index: 200; transform: translate(-50%, -50%); animation: coinLabelFloat 0.9s ease-out forwards; }
+@keyframes coinLabelFloat { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.7); } 25% { opacity: 1; transform: translate(-50%, -70%) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -140%) scale(1); } }
+
+.clicker-wrap { display: flex; flex-direction: column; align-items: center; padding-top: 6px; }
+.energy-bar-card { width: 100%; background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); padding: 14px 16px; margin-bottom: 20px; }
+.energy-bar-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.energy-bar-label { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.energy-bar-timer { font-size: 12px; color: var(--muted); font-weight: 600; }
+.energy-bar-track { height: 10px; border-radius: var(--radius-pill); background: var(--surface-soft); overflow: hidden; }
+.energy-bar-fill { height: 100%; background: linear-gradient(90deg, #ffcf6b, #f5a623); border-radius: var(--radius-pill); transition: width 0.4s ease; }
+
+.coin-stage { position: relative; width: 240px; height: 240px; display: flex; align-items: center; justify-content: center; margin: 10px 0 22px; }
+.coin-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--accent-soft-2); opacity: 0.7; }
+.coin-ring--pulse { animation: ringPulse 0.6s ease-out forwards; }
+@keyframes ringPulse { 0% { transform: scale(0.7); opacity: 0.6; border-color: var(--accent-400); } 100% { transform: scale(1.28); opacity: 0; border-color: var(--accent-400); } }
+.coin-button { position: relative; width: 190px; height: 190px; border-radius: 50%; background: radial-gradient(circle at 32% 28%, #ffe9a8, #f5b93e 46%, #e2900f 100%); box-shadow: 0 18px 34px rgba(226, 144, 15, 0.4), inset 0 -8px 16px rgba(150, 84, 0, 0.25), inset 0 6px 12px rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; font-size: 84px; user-select: none; transition: transform 0.08s ease; }
+.coin-button:active { transform: scale(0.93); }
+.coin-button.is-disabled { filter: grayscale(0.7); opacity: 0.55; }
+.coin-button__glyph { filter: drop-shadow(0 3px 3px rgba(120,60,0,0.25)); pointer-events: none; }
+.clicker-stats { display: flex; gap: 10px; width: 100%; }
+.clicker-stat { flex: 1; text-align: center; background: var(--surface); border-radius: var(--radius-md); padding: 12px; box-shadow: var(--shadow-card); }
+.clicker-stat__value { font-family: var(--font-display); font-weight: 700; font-size: 17px; }
+.clicker-stat__label { font-size: 11.5px; color: var(--muted); margin-top: 2px; font-weight: 600; }
+.clicker-hint { text-align: center; font-size: 12.5px; color: var(--muted); margin-top: 16px; line-height: 1.5; }
+
+.podium { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 20px; }
+.podium-slot { flex: 1; text-align: center; }
+.podium-slot__avatar { width: 54px; height: 54px; border-radius: 50%; margin: 0 auto 8px; border: 3px solid var(--surface); box-shadow: var(--shadow-card); background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; color: var(--accent-600); object-fit: cover; }
+.podium-slot--1 .podium-slot__avatar { width: 68px; height: 68px; border-color: #ffd873; }
+.podium-slot__name { font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; }
+.podium-slot__coins { font-size: 12px; color: var(--accent-600); font-weight: 700; margin-top: 2px; }
+.podium-slot__bar { margin-top: 10px; border-radius: 14px 14px 0 0; background: var(--accent-grad); display: flex; align-items: flex-start; justify-content: center; padding-top: 8px; color: #fff; font-family: var(--font-display); font-weight: 700; font-size: 18px; }
+.podium-slot--1 .podium-slot__bar { height: 88px; background: linear-gradient(160deg, #ffd873, #f0a900); }
+.podium-slot--2 .podium-slot__bar { height: 66px; }
+.podium-slot--3 .podium-slot__bar { height: 50px; background: linear-gradient(160deg, #9cb4ff, #6c8ef0); }
+
+.rating-row { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 8px; box-shadow: var(--shadow-card); }
+.rating-row--me { border: 1.5px solid var(--accent-400); }
+.rating-row__rank { width: 24px; text-align: center; font-family: var(--font-display); font-weight: 700; color: var(--muted); font-size: 14px; }
+.rating-row__avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent-600); font-size: 14px; object-fit: cover; }
+.rating-row__name { font-weight: 700; font-size: 13.5px; }
+.rating-row__sub { font-size: 11.5px; color: var(--muted); }
+.rating-row__coins { margin-left: auto; font-family: var(--font-display); font-weight: 700; font-size: 14px; color: var(--accent-600); }
+
+.history-row { display: flex; align-items: center; gap: 12px; padding: 13px 4px; border-bottom: 1px solid var(--surface-line); }
+.history-row:last-child { border-bottom: none; }
+.history-row__icon { width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+.history-row__body { flex: 1; min-width: 0; }
+.history-row__title { font-size: 13.5px; font-weight: 700; }
+.history-row__time { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.history-row__amount { font-family: var(--font-display); font-weight: 700; font-size: 14.5px; flex-shrink: 0; }
+.history-row__amount--pos { color: var(--success); }
+.history-row__amount--neg { color: var(--danger); }
+
+.flex { display: flex; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.items-center { align-items: center; }
+
+.demo-badge {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--nav-h) + var(--safe-bottom) + 78px);
+  background: rgba(18,20,31,0.85); color: #fff; font-size: 11px; font-weight: 600;
+  padding: 6px 12px; border-radius: var(--radius-pill); z-index: 38; letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header class="app-header">
+    <button id="header-back" class="header-back hidden" aria-label="Назад">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <h1 id="page-title" class="header-title">PinShare</h1>
+    <div class="header-balance" id="header-balance">
+      <span class="header-balance__icon">🪙</span>
+      <span id="header-balance-value">0</span>
+    </div>
+  </header>
+
+  <main id="app-content" class="app-content"></main>
+
+  <nav class="bottom-nav">
+    <button class="nav-item" data-route="home" aria-label="Главная">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 11.5L12 4l8 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Главная</span>
+    </button>
+    <button class="nav-item" data-route="tasks" aria-label="Задания">
+      <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="4.2" rx="1.4" stroke="currentColor" stroke-width="2"/><rect x="4" y="14.8" width="16" height="4.2" rx="1.4" stroke="currentColor" stroke-width="2"/></svg>
+      <span>Задания</span>
+    </button>
+    <button class="nav-item nav-item--clicker" data-route="clicker" aria-label="Кликер">
+      <span class="nav-clicker-coin">🪙</span>
+      <span>Кликер</span>
+    </button>
+    <button class="nav-item" data-route="rating" aria-label="Рейтинг">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>Рейтинг</span>
+    </button>
+    <button class="nav-item" data-route="profile" aria-label="Профиль">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="2"/><path d="M5 20c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>Профиль</span>
+    </button>
+  </nav>
+
+  <button id="fab-create" class="fab hidden" aria-label="Создать задание">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+  </button>
+
+  <div id="demo-badge" class="demo-badge hidden">🧪 Демо-режим — данные хранятся только в этом браузере</div>
+</div>
+
+<div id="sheet-overlay" class="sheet-overlay hidden">
+  <div id="sheet" class="sheet">
+    <div class="sheet__handle"></div>
+    <div id="sheet-content" class="sheet__content"></div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   PinShare — автономный демо-файл (единый HTML, без backend/Supabase).
+   Вся "серверная" логика замокана в localStorage — работает полностью
+   офлайн, для превью дизайна и UX-логики. Для боевого запуска с
+   реальным Telegram Bot API + Supabase используйте полный проект
+   (backend/ + bot/ + supabase/schema.sql), который был предоставлен
+   отдельно — этот файл лишь одна его часть (фронтенд), собранная в
+   одном файле по вашему запросу.
+===================================================================== */
+
+// ---------------------------------------------------------------------
+// 1. Telegram WebApp SDK — обёртка с фолбэком вне Telegram
+// ---------------------------------------------------------------------
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+const isInsideTelegram = Boolean(tg && tg.initData);
+
+function initTelegram() {
+  if (!tg) return;
+  tg.ready();
+  tg.expand();
+  try { tg.setHeaderColor && tg.setHeaderColor("#2f5adf"); tg.setBackgroundColor && tg.setBackgroundColor("#f5f8fd"); } catch (e) {}
+}
+function getTelegramUser() {
+  const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+  if (u) return u;
+  return { id: 0, first_name: "Гость", username: null, photo_url: null };
+}
+function haptic(style) {
+  const h = tg && tg.HapticFeedback;
+  if (!h) return;
+  if (["light","medium","heavy","rigid","soft"].includes(style)) h.impactOccurred(style);
+  else if (["error","success","warning"].includes(style)) h.notificationOccurred(style);
+}
+function openLink(url) {
+  if (tg && tg.openLink) tg.openLink(url, { try_instant_view: false });
+  else window.open(url, "_blank");
+}
+function openTelegramLink(url) {
+  if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
+  else window.open(url, "_blank");
+}
+function showConfirm(message) {
+  return new Promise((resolve) => {
+    if (tg && tg.showConfirm) tg.showConfirm(message, (ok) => resolve(ok));
+    else resolve(window.confirm(message));
+  });
+}
+function showBackButton(onClick) {
+  if (!tg || !tg.BackButton) return;
+  tg.BackButton.show();
+  tg.BackButton.offClick(onClick);
+  tg.BackButton.onClick(onClick);
+}
+function hideBackButton() { if (tg && tg.BackButton) tg.BackButton.hide(); }
+
+// ---------------------------------------------------------------------
+// 2. Утилиты
+// ---------------------------------------------------------------------
+function formatCoins(value) {
+  const n = Number(value || 0);
+  const rounded = Math.round(n * 100) / 100;
+  const str = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+  return str.replace(/\.00$/, "");
+}
+function formatCoinsSigned(value) {
+  const n = Number(value || 0);
+  return (n > 0 ? "+" : "") + formatCoins(n);
+}
+function timeAgo(dateStr) {
+  const date = new Date(dateStr);
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return "только что";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return minutes + " мин назад";
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours + " ч назад";
+  const days = Math.floor(hours / 24);
+  if (days < 7) return days + " дн назад";
+  return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+}
+function formatDuration(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  if (h > 0) return h + "ч " + String(m).padStart(2, "0") + "м";
+  if (m > 0) return m + "м " + String(sec).padStart(2, "0") + "с";
+  return sec + "с";
+}
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str == null ? "" : str;
+  return div.innerHTML;
+}
+function uid(prefix) {
+  return (prefix || "id") + "_" + Math.random().toString(36).slice(2, 10);
+}
+function nowIso() { return new Date().toISOString(); }
+
+let toastContainer = null;
+function toast(message, type) {
+  if (!toastContainer) toastContainer = document.getElementById("toast-container");
+  const el = document.createElement("div");
+  el.className = "toast toast--" + (type || "default");
+  el.textContent = message;
+  toastContainer.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("toast--visible"));
+  setTimeout(() => { el.classList.remove("toast--visible"); setTimeout(() => el.remove(), 300); }, 2600);
+}
+
+function coinBurst(originEl, amountText) {
+  const rect = originEl.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+  const count = 7;
+  for (let i = 0; i < count; i++) {
+    const particle = document.createElement("div");
+    particle.className = "coin-particle";
+    particle.textContent = "🪙";
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.6;
+    const distance = 46 + Math.random() * 34;
+    const dx = Math.cos(angle) * distance, dy = Math.sin(angle) * distance - 30;
+    particle.style.left = cx + "px"; particle.style.top = cy + "px";
+    particle.style.setProperty("--dx", dx + "px"); particle.style.setProperty("--dy", dy + "px");
+    document.body.appendChild(particle);
+    particle.addEventListener("animationend", () => particle.remove());
+  }
+  const label = document.createElement("div");
+  label.className = "coin-float-label";
+  label.textContent = amountText || "+🪙";
+  label.style.left = cx + "px"; label.style.top = (cy - 10) + "px";
+  document.body.appendChild(label);
+  label.addEventListener("animationend", () => label.remove());
+}
+function animateNumber(el, from, to, duration) {
+  duration = duration || 500;
+  const start = performance.now(), diff = to - from;
+  function step(now) {
+    const progress = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = formatCoins(from + diff * eased);
+    if (progress < 1) requestAnimationFrame(step); else el.textContent = formatCoins(to);
+  }
+  requestAnimationFrame(step);
+}
+
+// ---------------------------------------------------------------------
+// 3. Мок-"бэкенд" на localStorage
+// ---------------------------------------------------------------------
+const STORAGE_KEY = "pinshare_demo_v1";
+const CLICKER_REWARD_PER_CLICK = 0.5;
+const CLICKER_ENERGY_PER_CLICK = 1;
+const CLICKER_MAX_ENERGY = 200;
+const CLICKER_REGEN_HOURS = 12;
+
+const CATEGORIES = [
+  { id: 1, code: "like", name: "Лайк", icon: "❤️" },
+  { id: 2, code: "follow", name: "Подписка", icon: "➕" },
+  { id: 3, code: "comment", name: "Комментарий", icon: "💬" },
+  { id: 4, code: "save", name: "Сохранение пина", icon: "📌" },
+  { id: 5, code: "board_follow", name: "Подписка на доску", icon: "📋" },
+  { id: 6, code: "repost", name: "Репост", icon: "🔁" },
+  { id: 7, code: "other", name: "Другое", icon: "✨" },
+];
+
+const DEMO_USERS = [
+  { id: "demo_1", first_name: "Анна", username: "anna_pins", total_earned: 128, tasks_completed: 41 },
+  { id: "demo_2", first_name: "Игорь", username: "igor_creative", total_earned: 96, tasks_completed: 30 },
+  { id: "demo_3", first_name: "Мария", username: "maria_boards", total_earned: 74, tasks_completed: 22 },
+  { id: "demo_4", first_name: "Данил", username: "danil_pin", total_earned: 51, tasks_completed: 17 },
+  { id: "demo_5", first_name: "Соня", username: "sonya_design", total_earned: 33, tasks_completed: 9 },
+];
+
+function categoryById(id) { return CATEGORIES.find((c) => c.id === id) || CATEGORIES[6]; }
+function categoryByCode(code) { return CATEGORIES.find((c) => c.code === code); }
+
+function seedTasks() {
+  return [
+    { id: uid("task"), owner_id: "demo_1", category_id: 1, title: "Лайкните мой пин с рецептом", description: "Поставьте лайк на пин с рецептом тыквенного супа. Ссылка ведёт прямо на пин.", target_url: "https://pinterest.com/pin/example1", reward: 1, slots_total: 20, slots_left: 17, status: "active", created_at: nowIso() },
+    { id: uid("task"), owner_id: "demo_2", category_id: 2, title: "Подпишитесь на мой профиль дизайнера", description: "Нужна подписка на профиль с интерьерными досками. После подписки не отписывайтесь минимум неделю.", target_url: "https://pinterest.com/igor_creative", reward: 2, slots_total: 15, slots_left: 9, status: "active", created_at: nowIso() },
+    { id: uid("task"), owner_id: "demo_3", category_id: 3, title: "Оставьте комментарий под пином со свадебным букетом", description: "Комментарий должен быть на русском языке, минимум 4 слова, без спама.", target_url: "https://pinterest.com/pin/example3", reward: 1.5, slots_total: 10, slots_left: 6, status: "active", created_at: nowIso() },
+    { id: uid("task"), owner_id: "demo_4", category_id: 4, title: "Сохраните пин с летним маникюром себе на доску", description: "Просто сохраните пин на любую свою доску — это поможет продвижению.", target_url: "https://pinterest.com/pin/example4", reward: 0.8, slots_total: 30, slots_left: 24, status: "active", created_at: nowIso() },
+    { id: uid("task"), owner_id: "demo_1", category_id: 5, title: "Подпишитесь на доску «Скандинавский интерьер»", description: "Доска с 40+ пинами про скандинавский стиль — подпишитесь на неё целиком.", target_url: "https://pinterest.com/board/example5", reward: 1.2, slots_total: 12, slots_left: 8, status: "active", created_at: nowIso() },
+    { id: uid("task"), owner_id: "demo_5", category_id: 6, title: "Сделайте репост подборки осенних образов", description: "Репостните подборку в любую свою соцсеть и пришлите ссылку в комментарии.", target_url: "https://pinterest.com/pin/example6", reward: 2.5, slots_total: 8, slots_left: 5, status: "active", created_at: nowIso() },
+    { id: uid("task"), owner_id: "demo_2", category_id: 1, title: "Лайкните 3 пина в моём профиле", description: "Откройте профиль и лайкните любые 3 пина — не обязательно одни и те же для всех.", target_url: "https://pinterest.com/igor_creative", reward: 1, slots_total: 25, slots_left: 19, status: "active", created_at: nowIso() },
+    { id: uid("task"), owner_id: "demo_3", category_id: 7, title: "Оцените мою доску и напишите фидбек в комментарии", description: "Любой полезный фидбек по оформлению доски — приветствуется конструктивная критика.", target_url: "https://pinterest.com/maria_boards", reward: 1.8, slots_total: 10, slots_left: 7, status: "active", created_at: nowIso() },
+  ];
+}
+
+function defaultState() {
+  const tgUser = getTelegramUser();
+  return {
+    user: {
+      id: "me",
+      telegram_id: tgUser.id || 0,
+      username: tgUser.username || null,
+      first_name: tgUser.first_name || "Гость",
+      avatar_url: tgUser.photo_url || null,
+      balance: 15,
+      total_earned: 0,
+      energy: CLICKER_MAX_ENERGY,
+      energy_max: CLICKER_MAX_ENERGY,
+      energy_updated_at: nowIso(),
+      tasks_completed: 0,
+      tasks_created: 0,
+      created_at: nowIso(),
+    },
+    tasks: seedTasks(),
+    submissions: [],
+    transactions: [],
+  };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* повреждённые данные — пересоздадим */ }
+  const fresh = defaultState();
+  saveState(fresh);
+  return fresh;
+}
+function saveState(state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+let DB = loadState();
+
+function recalcEnergy(user) {
+  if (user.energy >= user.energy_max) return user;
+  const secondsPerPoint = (CLICKER_REGEN_HOURS * 3600) / user.energy_max;
+  const elapsed = (Date.now() - new Date(user.energy_updated_at).getTime()) / 1000;
+  const gained = Math.floor(elapsed / secondsPerPoint);
+  if (gained <= 0) return user;
+  user.energy = Math.min(user.energy_max, user.energy + gained);
+  user.energy_updated_at = nowIso();
+  return user;
+}
+
+function allUsersById(id) {
+  if (id === "me") return DB.user;
+  return DEMO_USERS.find((u) => u.id === id) || { id, first_name: "Пользователь", username: null };
+}
+
+function addTransaction(amount, type, comment, relatedTaskId) {
+  DB.transactions.unshift({
+    id: uid("tx"), amount, type, comment: comment || "", related_task_id: relatedTaskId || null, created_at: nowIso(),
+  });
+}
+
+// Симуляция "второй стороны": через некоторое время после отправки
+// выполнения демо-владелец задания подтверждает его; а после создания
+// собственного задания кто-то из демо-пользователей присылает заявку.
+function scheduleAutoApprove(submissionId) {
+  setTimeout(() => {
+    const sub = DB.submissions.find((s) => s.id === submissionId);
+    if (!sub || sub.status !== "pending") return;
+    const task = DB.tasks.find((t) => t.id === sub.task_id);
+    if (!task) return;
+    sub.status = "approved";
+    sub.reviewed_at = nowIso();
+    if (sub.performer_id === "me") {
+      DB.user.balance = round2(DB.user.balance + task.reward);
+      DB.user.total_earned = round2(DB.user.total_earned + task.reward);
+      DB.user.tasks_completed += 1;
+      addTransaction(task.reward, "task_reward", 'Награда за выполнение «' + task.title + '»', task.id);
+    }
+    task.slots_left = Math.max(0, task.slots_left - 1);
+    if (task.slots_left === 0) task.status = "completed";
+    saveState(DB);
+    window.dispatchEvent(new CustomEvent("pinshare:balance-changed"));
+    if (sub.performer_id === "me") {
+      toast('✅ Задание «' + task.title + '» подтверждено! +' + formatCoins(task.reward) + ' монет', "success");
+    }
+  }, 3500);
+}
+function scheduleIncomingSubmission(taskId) {
+  setTimeout(() => {
+    const task = DB.tasks.find((t) => t.id === taskId);
+    if (!task || task.status !== "active" || task.slots_left <= 0) return;
+    const performer = DEMO_USERS[Math.floor(Math.random() * DEMO_USERS.length)];
+    const exists = DB.submissions.find((s) => s.task_id === taskId && s.performer_id === performer.id);
+    if (exists) return;
+    DB.submissions.push({
+      id: uid("sub"), task_id: taskId, performer_id: performer.id, status: "pending",
+      proof_comment: "Выполнил(а) точно по описанию!", proof_url: "", submitted_at: nowIso(), reviewed_at: null,
+    });
+    saveState(DB);
+    toast('📥 Новая заявка на ваше задание «' + task.title + '»', "default");
+  }, 5000);
+}
+function round2(n) { return Math.round(n * 100) / 100; }
+
+// --- "API" ---
+const api = {
+  async getMe() {
+    DB.user = recalcEnergy(DB.user);
+    saveState(DB);
+    return DB.user;
+  },
+  async getCategories() { return CATEGORIES; },
+  async getTasks(categoryCode) {
+    let list = DB.tasks.filter((t) => t.status === "active" && t.slots_left > 0);
+    if (categoryCode) {
+      const cat = categoryByCode(categoryCode);
+      if (cat) list = list.filter((t) => t.category_id === cat.id);
+    }
+    return list
+      .filter((t) => t.owner_id !== "me" && !DB.submissions.find((s) => s.task_id === t.id && s.performer_id === "me"))
+      .map(serializeTask)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  },
+  async getTask(id) {
+    const t = DB.tasks.find((x) => x.id === id);
+    if (!t) throw new ApiError("Задание не найдено", 404);
+    return serializeTask(t);
+  },
+  async createTask(payload) {
+    const cost = round2(payload.reward * payload.slots_total);
+    if (cost > DB.user.balance) throw new ApiError("Недостаточно монет. Нужно " + cost + ", доступно " + formatCoins(DB.user.balance), 402);
+    DB.user.balance = round2(DB.user.balance - cost);
+    DB.user.tasks_created += 1;
+    const task = {
+      id: uid("task"), owner_id: "me", category_id: payload.category_id,
+      title: payload.title.trim(), description: (payload.description || "").trim(),
+      target_url: payload.target_url.trim(), reward: payload.reward,
+      slots_total: payload.slots_total, slots_left: payload.slots_total,
+      status: "active", created_at: nowIso(),
+    };
+    DB.tasks.push(task);
+    addTransaction(-cost, "task_create_cost", 'Создание задания «' + task.title + '»', task.id);
+    saveState(DB);
+    scheduleIncomingSubmission(task.id);
+    return serializeTask(task);
+  },
+  async cancelTask(id) {
+    const t = DB.tasks.find((x) => x.id === id);
+    if (!t) throw new ApiError("Задание не найдено", 404);
+    if (t.owner_id !== "me") throw new ApiError("Это не ваше задание", 403);
+    const refund = round2(t.slots_left * t.reward);
+    if (refund > 0) {
+      DB.user.balance = round2(DB.user.balance + refund);
+      addTransaction(refund, "task_refund", 'Возврат за отменённое задание «' + t.title + '»', t.id);
+    }
+    t.status = "cancelled"; t.slots_left = 0;
+    saveState(DB);
+    return serializeTask(t);
+  },
+  async submitTask(id, payload) {
+    const t = DB.tasks.find((x) => x.id === id);
+    if (!t) throw new ApiError("Задание не найдено", 404);
+    if (t.owner_id === "me") throw new ApiError("Нельзя выполнить собственное задание", 400);
+    if (t.status !== "active" || t.slots_left <= 0) throw new ApiError("Задание больше не доступно", 400);
+    if (DB.submissions.find((s) => s.task_id === id && s.performer_id === "me")) {
+      throw new ApiError("Вы уже отправляли выполнение этого задания", 409);
+    }
+    const sub = {
+      id: uid("sub"), task_id: id, performer_id: "me", status: "pending",
+      proof_comment: (payload.proof_comment || "").trim(), proof_url: (payload.proof_url || "").trim(),
+      submitted_at: nowIso(), reviewed_at: null,
+    };
+    DB.submissions.push(sub);
+    saveState(DB);
+    scheduleAutoApprove(sub.id);
+    return sub;
+  },
+  async getMySubmissions() {
+    return DB.submissions.filter((s) => s.performer_id === "me").map((s) => {
+      const t = DB.tasks.find((x) => x.id === s.task_id) || {};
+      return { ...s, task_title: t.title || "—", task_reward: t.reward || 0 };
+    }).sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at));
+  },
+  async getIncomingSubmissions() {
+    const myTaskIds = DB.tasks.filter((t) => t.owner_id === "me").map((t) => t.id);
+    return DB.submissions.filter((s) => myTaskIds.includes(s.task_id)).map((s) => {
+      const t = DB.tasks.find((x) => x.id === s.task_id) || {};
+      const performer = allUsersById(s.performer_id);
+      return { ...s, task_title: t.title || "—", task_reward: t.reward || 0, performer_username: performer.username, performer_avatar: performer.avatar_url };
+    }).sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at));
+  },
+  async approveSubmission(id) {
+    const s = DB.submissions.find((x) => x.id === id);
+    if (!s) throw new ApiError("Заявка не найдена", 404);
+    if (s.status !== "pending") throw new ApiError("Заявка уже обработана", 400);
+    const t = DB.tasks.find((x) => x.id === s.task_id);
+    s.status = "approved"; s.reviewed_at = nowIso();
+    t.slots_left = Math.max(0, t.slots_left - 1);
+    if (t.slots_left === 0) t.status = "completed";
+    saveState(DB);
+    return s;
+  },
+  async rejectSubmission(id) {
+    const s = DB.submissions.find((x) => x.id === id);
+    if (!s) throw new ApiError("Заявка не найдена", 404);
+    if (s.status !== "pending") throw new ApiError("Заявка уже обработана", 400);
+    s.status = "rejected"; s.reviewed_at = nowIso();
+    saveState(DB);
+    return s;
+  },
+  async getMyCreatedTasks() {
+    return DB.tasks.filter((t) => t.owner_id === "me").map((t) => {
+      const pending = DB.submissions.filter((s) => s.task_id === t.id && s.status === "pending").length;
+      const cat = categoryById(t.category_id);
+      return { ...t, category_code: cat.code, category_name: cat.name, category_icon: cat.icon, pending_submissions: pending };
+    }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  },
+  async getMyHistory() { return DB.transactions; },
+  async getClickerState() {
+    DB.user = recalcEnergy(DB.user);
+    saveState(DB);
+    const u = DB.user;
+    const secondsPerPoint = (CLICKER_REGEN_HOURS * 3600) / u.energy_max;
+    const missing = u.energy_max - u.energy;
+    const elapsed = (Date.now() - new Date(u.energy_updated_at).getTime()) / 1000;
+    const secondsToFull = missing <= 0 ? 0 : Math.ceil(missing * secondsPerPoint - elapsed);
+    return {
+      energy: u.energy, energy_max: u.energy_max, energy_updated_at: u.energy_updated_at,
+      seconds_to_full: Math.max(0, secondsToFull), balance: u.balance,
+      reward_per_click: CLICKER_REWARD_PER_CLICK, energy_per_click: CLICKER_ENERGY_PER_CLICK,
+    };
+  },
+  async sendClicks(clicks) {
+    const u = DB.user;
+    const requested = Math.min(clicks, 50);
+    const maxAffordable = Math.floor(u.energy / CLICKER_ENERGY_PER_CLICK);
+    if (maxAffordable <= 0) throw new ApiError("Энергия закончилась. Дождитесь восстановления.", 400);
+    const accepted = Math.min(requested, maxAffordable);
+    const energySpent = accepted * CLICKER_ENERGY_PER_CLICK;
+    const earned = round2(accepted * CLICKER_REWARD_PER_CLICK);
+    const wasFull = u.energy >= u.energy_max;
+    u.energy = u.energy - energySpent;
+    if (wasFull) u.energy_updated_at = nowIso();
+    u.balance = round2(u.balance + earned);
+    u.total_earned = round2(u.total_earned + earned);
+    addTransaction(earned, "clicker", "Кликер: " + accepted + " нажатий");
+    saveState(DB);
+    return { accepted_clicks: accepted, earned, balance: u.balance, energy: u.energy, energy_max: u.energy_max, energy_updated_at: u.energy_updated_at };
+  },
+  async getRating() {
+    const list = [
+      ...DEMO_USERS.map((u) => ({ ...u, is_me: false })),
+      { id: "me", first_name: DB.user.first_name, username: DB.user.username, avatar_url: DB.user.avatar_url, total_earned: DB.user.total_earned, tasks_completed: DB.user.tasks_completed, is_me: true },
+    ].sort((a, b) => b.total_earned - a.total_earned || b.tasks_completed - a.tasks_completed);
+    return list.map((u, i) => ({ ...u, rank: i + 1 }));
+  },
+};
+
+function serializeTask(t) {
+  const cat = categoryById(t.category_id);
+  const owner = allUsersById(t.owner_id);
+  const mySub = DB.submissions.find((s) => s.task_id === t.id && s.performer_id === "me");
+  return {
+    ...t, category_code: cat.code, category_name: cat.name, category_icon: cat.icon,
+    owner_username: owner.username, owner_avatar: owner.avatar_url,
+    is_own: t.owner_id === "me", my_submission_status: mySub ? mySub.status : null,
+  };
+}
+
+function ApiError(message, status) {
+  this.message = message; this.status = status; this.name = "ApiError";
+}
+ApiError.prototype = Object.create(Error.prototype);
+
+// ---------------------------------------------------------------------
+// 4. Компоненты
+// ---------------------------------------------------------------------
+const overlayEl = document.getElementById("sheet-overlay");
+const sheetContentEl = document.getElementById("sheet-content");
+function openSheet(html) {
+  sheetContentEl.innerHTML = html;
+  overlayEl.classList.remove("hidden");
+  requestAnimationFrame(() => overlayEl.classList.add("sheet-overlay--visible"));
+  document.body.style.overflow = "hidden";
+}
+function closeSheet() {
+  overlayEl.classList.remove("sheet-overlay--visible");
+  document.body.style.overflow = "";
+  setTimeout(() => { overlayEl.classList.add("hidden"); sheetContentEl.innerHTML = ""; }, 240);
+}
+overlayEl.addEventListener("click", (e) => { if (e.target === overlayEl) closeSheet(); });
+
+function renderTaskCard(task, showStatus) {
+  const statusMap = { pending: { label: "На проверке", cls: "pending" }, approved: { label: "Выполнено", cls: "approved" }, rejected: { label: "Отклонено", cls: "rejected" } };
+  const st = task.my_submission_status ? statusMap[task.my_submission_status] : null;
+  return (
+    '<div class="task-card" data-task-id="' + task.id + '">' +
+      '<div class="task-card__top">' +
+        '<div class="task-card__icon">' + (task.category_icon || "✨") + '</div>' +
+        '<div class="task-card__body">' +
+          '<div class="task-card__category">' + escapeHtml(task.category_name || "") + '</div>' +
+          '<div class="task-card__title">' + escapeHtml(task.title) + '</div>' +
+          '<div class="task-card__desc">' + escapeHtml(task.description || "Без описания") + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="task-card__bottom">' +
+        '<div class="task-card__meta">' +
+          '<span class="reward-chip">🪙 +' + formatCoins(task.reward) + '</span>' +
+          '<span class="slots-chip">' + task.slots_left + ' мест</span>' +
+        '</div>' +
+        (showStatus !== false && st
+          ? '<span class="status-chip status-chip--' + st.cls + '">' + st.label + '</span>'
+          : '<button class="btn btn-primary btn-sm">Открыть</button>') +
+      '</div>' +
+    '</div>'
+  );
+}
+function renderSkeletonCards(count) {
+  let html = "";
+  for (let i = 0; i < (count || 3); i++) {
+    html += '<div class="card" style="margin-bottom:12px;">' +
+      '<div class="skeleton" style="height:14px; width:40%; margin-bottom:10px;"></div>' +
+      '<div class="skeleton" style="height:18px; width:75%; margin-bottom:8px;"></div>' +
+      '<div class="skeleton" style="height:13px; width:90%; margin-bottom:4px;"></div>' +
+      '<div class="skeleton" style="height:34px; width:100%; margin-top:14px; border-radius:999px;"></div>' +
+    '</div>';
+  }
+  return html;
+}
+function emptyState(icon, title, text) {
+  return '<div class="empty-state"><div class="empty-state__icon">' + icon + '</div>' +
+    '<div class="empty-state__title">' + escapeHtml(title) + '</div>' +
+    '<div class="empty-state__text">' + escapeHtml(text) + '</div></div>';
+}
+function avatarHtml(user, size) {
+  size = size || 62;
+  const initial = ((user && (user.first_name || user.username)) || "?").trim().charAt(0).toUpperCase();
+  if (user && user.avatar_url) {
+    return '<img class="avatar" style="width:' + size + 'px;height:' + size + 'px" src="' + user.avatar_url + '" alt="" />';
+  }
+  return '<div class="avatar" style="width:' + size + 'px;height:' + size + 'px">' + initial + '</div>';
+}
+function historyIcon(type) {
+  const map = {
+    task_reward: { icon: "✅", bg: "var(--success-soft)" },
+    task_create_cost: { icon: "📤", bg: "var(--danger-soft)" },
+    task_refund: { icon: "↩️", bg: "var(--accent-soft)" },
+    clicker: { icon: "🪙", bg: "var(--warning-soft)" },
+    referral_bonus: { icon: "🎁", bg: "var(--accent-soft)" },
+  };
+  return map[type] || { icon: "💠", bg: "var(--surface-soft)" };
+}
+function historyLabel(type) {
+  const map = {
+    task_reward: "Награда за задание", task_create_cost: "Создание задания",
+    task_refund: "Возврат за задание", clicker: "Заработок в кликере", referral_bonus: "Реферальный бонус",
+  };
+  return map[type] || type;
+}
+function updateHeaderBalance(balance) {
+  const el = document.getElementById("header-balance-value");
+  if (el) el.textContent = formatCoins(balance);
+}
+
+// ---------------------------------------------------------------------
+// 5. Роутер
+// ---------------------------------------------------------------------
+const routes = {};
+let currentUnmount = null;
+let currentRoute = null;
+const NAV_ROUTES = ["home", "tasks", "clicker", "profile", "rating"];
+
+function updateNav(route) {
+  document.querySelectorAll(".nav-item").forEach((el) => {
+    el.classList.toggle("nav-item--active", el.dataset.route === route || (route === "history" && el.dataset.route === "profile"));
+  });
+}
+function updateHeaderTitle(route) {
+  const titles = { home: "PinShare", tasks: "Задания", create: "Новое задание", clicker: "Кликер", profile: "Профиль", rating: "Рейтинг", history: "История" };
+  const titleEl = document.getElementById("page-title");
+  if (titleEl) titleEl.textContent = titles[route] || "PinShare";
+  const backBtn = document.getElementById("header-back");
+  if (backBtn) backBtn.classList.toggle("hidden", NAV_ROUTES.includes(route));
+}
+async function navigate(route) {
+  if (!routes[route]) route = "home";
+  if (currentUnmount) { try { currentUnmount(); } catch (e) { console.error(e); } currentUnmount = null; }
+  const container = document.getElementById("app-content");
+  container.classList.remove("page-enter");
+  void container.offsetWidth;
+  container.innerHTML = '<div class="page-loader"><div class="spinner"></div></div>';
+  try {
+    const result = await routes[route].mount(container);
+    if (typeof result === "function") currentUnmount = result;
+  } catch (e) {
+    console.error(e);
+    container.innerHTML = emptyState("⚠️", "Не удалось загрузить раздел", (e && e.message) || "Попробуйте снова");
+  }
+  container.classList.add("page-enter");
+  currentRoute = route;
+  updateNav(route);
+  updateHeaderTitle(route);
+  window.location.hash = route;
+  container.scrollTop = 0;
+}
+
+// ---------------------------------------------------------------------
+// 6. Страницы
+// ---------------------------------------------------------------------
+routes.home = { mount: mountHome };
+async function mountHome(container) {
+  const user = await api.getMe();
+  container.innerHTML =
+    '<h1 class="h1">Привет, ' + escapeHtml((user.first_name || "друг").split(" ")[0]) + ' 👋</h1>' +
+    '<p class="text-muted" style="margin:0 0 16px; font-size:13.5px;">Выполняй задания и зарабатывай монеты</p>' +
+    '<div class="balance-card">' +
+      '<div class="balance-card__label">Ваш баланс</div>' +
+      '<div class="balance-card__value"><span class="coin-icon">🪙</span><span id="home-balance">' + formatCoins(user.balance) + '</span></div>' +
+      '<div class="balance-card__row">' +
+        '<div class="balance-pill"><div class="balance-pill__num">' + user.tasks_completed + '</div><div class="balance-pill__label">Выполнено</div></div>' +
+        '<div class="balance-pill"><div class="balance-pill__num">' + user.tasks_created + '</div><div class="balance-pill__label">Создано</div></div>' +
+        '<div class="balance-pill"><div class="balance-pill__num">' + formatCoins(user.total_earned) + '</div><div class="balance-pill__label">Заработано</div></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="quick-actions">' +
+      '<button class="quick-action" data-route="tasks"><div class="quick-action__icon">📋</div>Задания</button>' +
+      '<button class="quick-action" data-route="clicker"><div class="quick-action__icon">🪙</div>Кликер</button>' +
+      '<button class="quick-action" data-route="create"><div class="quick-action__icon">➕</div>Создать</button>' +
+      '<button class="quick-action" data-route="rating"><div class="quick-action__icon">🏆</div>Рейтинг</button>' +
+    '</div>' +
+    '<div class="section-title"><span class="h2">Доступные задания</span><a href="#" id="home-see-all">Все задания →</a></div>' +
+    '<div id="home-tasks-list">' + renderSkeletonCards(3) + '</div>';
+
+  container.querySelectorAll("[data-route]").forEach((el) => el.addEventListener("click", () => navigate(el.dataset.route)));
+  container.querySelector("#home-see-all").addEventListener("click", (e) => { e.preventDefault(); navigate("tasks"); });
+
+  try {
+    const tasks = await api.getTasks();
+    const listEl = container.querySelector("#home-tasks-list");
+    if (!tasks.length) { listEl.innerHTML = emptyState("📭", "Пока нет заданий", "Загляните позже или создайте своё задание первым!"); return; }
+    listEl.innerHTML = tasks.slice(0, 4).map((t) => renderTaskCard(t, false)).join("");
+    listEl.querySelectorAll(".task-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const task = tasks.find((t) => t.id === card.dataset.taskId);
+        openTaskSheet(task, () => mountHome(container));
+      });
+    });
+  } catch (e) {
+    container.querySelector("#home-tasks-list").innerHTML = emptyState("⚠️", "Не удалось загрузить задания", e.message);
+  }
+}
+
+routes.tasks = { mount: mountTasks };
+let tasksActiveCategory = null;
+async function mountTasks(container) {
+  const fab = document.getElementById("fab-create");
+  fab.classList.remove("hidden");
+  fab.onclick = () => navigate("create");
+
+  container.innerHTML = '<div id="tasks-filters" class="chip-scroll"></div><div id="tasks-list">' + renderSkeletonCards(4) + '</div>';
+  const categories = await api.getCategories();
+  renderTaskFilters(container, categories);
+  await loadTasksList(container);
+
+  return () => { fab.classList.add("hidden"); fab.onclick = null; };
+}
+function renderTaskFilters(container, categories) {
+  const filtersEl = container.querySelector("#tasks-filters");
+  const chips = [{ code: null, name: "Все", icon: "🗂" }].concat(categories);
+  filtersEl.innerHTML = chips.map((c) =>
+    '<button class="filter-chip ' + (tasksActiveCategory === c.code ? "filter-chip--active" : "") + '" data-code="' + (c.code || "") + '">' +
+      '<span>' + c.icon + '</span><span>' + escapeHtml(c.name) + '</span></button>'
+  ).join("");
+  filtersEl.querySelectorAll(".filter-chip").forEach((chip) => {
+    chip.addEventListener("click", async () => {
+      tasksActiveCategory = chip.dataset.code || null;
+      renderTaskFilters(container, categories);
+      container.querySelector("#tasks-list").innerHTML = renderSkeletonCards(3);
+      await loadTasksList(container);
+    });
+  });
+}
+async function loadTasksList(container) {
+  const listEl = container.querySelector("#tasks-list");
+  try {
+    const tasks = await api.getTasks(tasksActiveCategory);
+    if (!tasks.length) {
+      listEl.innerHTML = emptyState("📭", "Заданий не найдено", tasksActiveCategory ? "Попробуйте другую категорию" : "Пока нет доступных заданий — создайте своё!");
+      return;
+    }
+    listEl.innerHTML = tasks.map((t) => renderTaskCard(t)).join("");
+    listEl.querySelectorAll(".task-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const task = tasks.find((t) => t.id === card.dataset.taskId);
+        openTaskSheet(task, () => loadTasksList(container));
+      });
+    });
+  } catch (e) {
+    listEl.innerHTML = emptyState("⚠️", "Ошибка загрузки", e.message);
+  }
+}
+function openTaskSheet(task, onDone) {
+  if (!task) return;
+  const alreadyDone = Boolean(task.my_submission_status);
+  const statusText = { pending: "⏳ Ваше выполнение отправлено и ожидает проверки владельцем.", approved: "✅ Задание выполнено, награда начислена.", rejected: "❌ Выполнение было отклонено. Попробуйте другое задание." }[task.my_submission_status];
+  openSheet(
+    '<div class="flex items-center gap-12" style="margin-bottom:14px;">' +
+      '<div class="task-card__icon" style="font-size:24px;">' + task.category_icon + '</div>' +
+      '<div><div class="task-card__category">' + escapeHtml(task.category_name) + '</div><div class="h2">' + escapeHtml(task.title) + '</div></div>' +
+    '</div>' +
+    '<p class="text-soft" style="line-height:1.5; font-size:14px;">' + escapeHtml(task.description || "Описание отсутствует.") + '</p>' +
+    '<div class="flex items-center gap-8" style="margin: 14px 0;">' +
+      '<span class="reward-chip">🪙 Награда +' + formatCoins(task.reward) + '</span>' +
+      '<span class="slots-chip">Осталось мест: ' + task.slots_left + '</span>' +
+    '</div>' +
+    '<button id="sheet-open-link" class="btn btn-secondary btn-block" style="margin-bottom:14px;">🔗 Перейти к заданию</button>' +
+    (alreadyDone
+      ? '<div class="card" style="background:var(--surface-soft); box-shadow:none; font-size:13.5px;">' + statusText + '</div>'
+      : '<div class="field"><label>Комментарий (необязательно)</label><textarea id="proof-comment" placeholder="Например: подписался под именем @username"></textarea></div>' +
+        '<div class="field"><label>Ссылка-подтверждение (необязательно)</label><input id="proof-url" type="text" placeholder="Ссылка на скриншот или ваш профиль" /></div>' +
+        '<button id="submit-proof-btn" class="btn btn-primary btn-block">Отправить выполнение работы</button>')
+  );
+  sheetContentEl.querySelector("#sheet-open-link").addEventListener("click", () => openLink(task.target_url));
+  const submitBtn = sheetContentEl.querySelector("#submit-proof-btn");
+  if (submitBtn) {
+    submitBtn.addEventListener("click", async () => {
+      submitBtn.disabled = true; submitBtn.textContent = "Отправка...";
+      try {
+        const proof_comment = sheetContentEl.querySelector("#proof-comment").value.trim();
+        const proof_url = sheetContentEl.querySelector("#proof-url").value.trim();
+        await api.submitTask(task.id, { proof_comment, proof_url });
+        haptic("success");
+        coinBurst(submitBtn, "Отправлено 🚀");
+        toast("Выполнение отправлено владельцу задания!", "success");
+        closeSheet();
+        if (onDone) onDone();
+      } catch (e) {
+        haptic("error"); toast(e.message, "error");
+        submitBtn.disabled = false; submitBtn.textContent = "Отправить выполнение работы";
+      }
+    });
+  }
+}
+
+routes.create = { mount: mountCreate };
+async function mountCreate(container) {
+  const user = await api.getMe();
+  const categories = await api.getCategories();
+  let selectedCategory = categories[0] ? categories[0].id : null;
+
+  container.innerHTML =
+    '<p class="text-muted" style="font-size:13.5px; margin-top:0;">Создайте задание для других пользователей — они выполнят его и получат от вас монеты за счёт вашего баланса.</p>' +
+    '<div class="field"><label>Категория задания</label><div class="category-picker" id="category-picker">' +
+      categories.map((c) => '<button type="button" class="filter-chip ' + (c.id === selectedCategory ? "filter-chip--active" : "") + '" data-id="' + c.id + '"><span>' + c.icon + '</span><span>' + escapeHtml(c.name) + '</span></button>').join("") +
+    '</div></div>' +
+    '<div class="field"><label>Название задания</label><input id="f-title" type="text" maxlength="120" placeholder="Например: Лайкните мой пин про интерьер" /></div>' +
+    '<div class="field"><label>Описание</label><textarea id="f-desc" maxlength="1000" placeholder="Опишите, что именно нужно сделать, чтобы задание засчиталось"></textarea></div>' +
+    '<div class="field"><label>Ссылка на пин / профиль / доску</label><input id="f-url" type="text" placeholder="https://pinterest.com/..." /></div>' +
+    '<div class="field-row">' +
+      '<div class="field"><label>Награда за 1 выполнение</label><input id="f-reward" type="number" min="0.1" step="0.1" placeholder="1" inputmode="decimal" /></div>' +
+      '<div class="field"><label>Количество исполнителей</label><input id="f-slots" type="number" min="1" step="1" placeholder="10" inputmode="numeric" /></div>' +
+    '</div>' +
+    '<div class="cost-summary"><span class="cost-summary__label">Итого спишется с баланса</span><span class="cost-summary__value" id="cost-total">0</span></div>' +
+    '<p class="field-hint" id="balance-hint">Ваш баланс: 🪙 ' + formatCoins(user.balance) + '</p>' +
+    '<button id="create-submit" class="btn btn-primary btn-block" style="margin-top:8px;">Создать задание</button>';
+
+  container.querySelectorAll("#category-picker .filter-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      selectedCategory = Number(chip.dataset.id);
+      container.querySelectorAll("#category-picker .filter-chip").forEach((c) => c.classList.remove("filter-chip--active"));
+      chip.classList.add("filter-chip--active");
+    });
+  });
+
+  const rewardInput = container.querySelector("#f-reward");
+  const slotsInput = container.querySelector("#f-slots");
+  const costEl = container.querySelector("#cost-total");
+  function recalcCost() {
+    const reward = parseFloat(rewardInput.value) || 0;
+    const slots = parseInt(slotsInput.value, 10) || 0;
+    const total = Math.round(reward * slots * 100) / 100;
+    costEl.textContent = "🪙 " + formatCoins(total);
+    costEl.classList.toggle("insufficient", total > user.balance);
+  }
+  rewardInput.addEventListener("input", recalcCost);
+  slotsInput.addEventListener("input", recalcCost);
+  recalcCost();
+
+  container.querySelector("#create-submit").addEventListener("click", async () => {
+    const btn = container.querySelector("#create-submit");
+    const title = container.querySelector("#f-title").value.trim();
+    const description = container.querySelector("#f-desc").value.trim();
+    const target_url = container.querySelector("#f-url").value.trim();
+    const reward = parseFloat(rewardInput.value);
+    const slots_total = parseInt(slotsInput.value, 10);
+    if (!selectedCategory) return toast("Выберите категорию задания", "error");
+    if (title.length < 3) return toast("Введите название задания (от 3 символов)", "error");
+    if (!target_url.startsWith("http")) return toast("Укажите корректную ссылку (начинается с http)", "error");
+    if (!reward || reward <= 0) return toast("Укажите награду за выполнение", "error");
+    if (!slots_total || slots_total <= 0) return toast("Укажите количество исполнителей", "error");
+
+    btn.disabled = true; btn.textContent = "Создаём...";
+    try {
+      await api.createTask({ category_id: selectedCategory, title, description, target_url, reward, slots_total });
+      haptic("success");
+      toast("Задание создано и опубликовано!", "success");
+      const me = await api.getMe();
+      updateHeaderBalance(me.balance);
+      navigate("tasks");
+    } catch (e) {
+      haptic("error"); toast(e.message, "error");
+      btn.disabled = false; btn.textContent = "Создать задание";
+    }
+  });
+
+  showBackButton(() => navigate("profile"));
+  return () => hideBackButton();
+}
+
+routes.clicker = { mount: mountClicker };
+const REGEN_HOURS = CLICKER_REGEN_HOURS;
+async function mountClicker(container) {
+  container.innerHTML =
+    '<div class="clicker-wrap">' +
+      '<div class="energy-bar-card">' +
+        '<div class="energy-bar-top"><span class="energy-bar-label">⚡ Энергия: <span id="energy-value">--</span>/<span id="energy-max">200</span></span><span class="energy-bar-timer" id="energy-timer"></span></div>' +
+        '<div class="energy-bar-track"><div class="energy-bar-fill" id="energy-fill" style="width:0%"></div></div>' +
+      '</div>' +
+      '<div class="coin-stage" id="coin-stage"><button class="coin-button" id="coin-btn"><span class="coin-button__glyph">🪙</span></button></div>' +
+      '<div class="clicker-stats">' +
+        '<div class="clicker-stat"><div class="clicker-stat__value" id="clicker-balance">0</div><div class="clicker-stat__label">Баланс</div></div>' +
+        '<div class="clicker-stat"><div class="clicker-stat__value" id="clicker-session">+0</div><div class="clicker-stat__label">За сессию</div></div>' +
+        '<div class="clicker-stat"><div class="clicker-stat__value" id="clicker-reward">0.5</div><div class="clicker-stat__label">За клик</div></div>' +
+      '</div>' +
+      '<p class="clicker-hint">Один клик = +<span id="hint-reward">0.5</span> монеты и −<span id="hint-energy">1</span> энергия. Энергия полностью восстанавливается за 12 часов.</p>' +
+    '</div>';
+
+  const els = {
+    energyValue: container.querySelector("#energy-value"), energyMax: container.querySelector("#energy-max"),
+    energyTimer: container.querySelector("#energy-timer"), energyFill: container.querySelector("#energy-fill"),
+    coinBtn: container.querySelector("#coin-btn"), coinStage: container.querySelector("#coin-stage"),
+    balance: container.querySelector("#clicker-balance"), session: container.querySelector("#clicker-session"),
+    reward: container.querySelector("#clicker-reward"), hintReward: container.querySelector("#hint-reward"), hintEnergy: container.querySelector("#hint-energy"),
+  };
+
+  let state;
+  try { state = await api.getClickerState(); }
+  catch (e) { container.innerHTML = emptyState("⚠️", "Не удалось загрузить кликер", e.message); return; }
+
+  let baseEnergy = state.energy;
+  let anchorTime = new Date(state.energy_updated_at).getTime();
+  const energyMax = state.energy_max;
+  const rewardPerClick = state.reward_per_click;
+  const energyPerClick = state.energy_per_click;
+  const secondsPerPoint = (REGEN_HOURS * 3600) / energyMax;
+  let sessionEarned = 0, pendingClicks = 0, flushTimer = null, tickTimer = null, resyncTimer = null;
+
+  els.energyMax.textContent = energyMax;
+  els.reward.textContent = formatCoins(rewardPerClick);
+  els.hintReward.textContent = formatCoins(rewardPerClick);
+  els.hintEnergy.textContent = energyPerClick;
+  animateNumber(els.balance, 0, state.balance, 600);
+
+  function currentEnergy() {
+    if (baseEnergy >= energyMax) return energyMax;
+    const elapsed = (Date.now() - anchorTime) / 1000;
+    return Math.min(energyMax, baseEnergy + Math.floor(elapsed / secondsPerPoint));
+  }
+  function secondsToNextPoint() {
+    if (baseEnergy >= energyMax) return 0;
+    const elapsed = (Date.now() - anchorTime) / 1000;
+    return Math.max(0, secondsPerPoint - (elapsed % secondsPerPoint));
+  }
+  function render() {
+    const energy = currentEnergy();
+    els.energyValue.textContent = energy;
+    els.energyFill.style.width = (energy / energyMax) * 100 + "%";
+    els.coinBtn.classList.toggle("is-disabled", energy <= 0);
+    if (energy >= energyMax) { els.energyTimer.textContent = "Полная энергия"; }
+    else {
+      const totalMissing = energyMax - energy;
+      const secondsLeft = (totalMissing - 1) * secondsPerPoint + secondsToNextPoint();
+      els.energyTimer.textContent = "Полная через " + formatDuration(secondsLeft);
+    }
+  }
+  render();
+  tickTimer = setInterval(render, 1000);
+  resyncTimer = setInterval(resync, 60000);
+  async function resync() {
+    try {
+      const fresh = await api.getClickerState();
+      if (pendingClicks === 0) { baseEnergy = fresh.energy; anchorTime = new Date(fresh.energy_updated_at).getTime(); render(); }
+    } catch (e) {}
+  }
+  function spawnRing() {
+    const ring = document.createElement("div");
+    ring.className = "coin-ring coin-ring--pulse";
+    els.coinStage.appendChild(ring);
+    ring.addEventListener("animationend", () => ring.remove());
+  }
+  function handleClick() {
+    const energyNow = currentEnergy();
+    if (energyNow < energyPerClick) { haptic("error"); toast("Энергия закончилась. Дождитесь восстановления ⏳", "error"); return; }
+    const wasFull = baseEnergy >= energyMax;
+    baseEnergy = Math.max(0, currentEnergy() - energyPerClick);
+    if (wasFull) anchorTime = Date.now();
+    sessionEarned = Math.round((sessionEarned + rewardPerClick) * 100) / 100;
+    els.session.textContent = "+" + formatCoins(sessionEarned);
+    const currentBalance = parseFloat(els.balance.textContent.replace(",", ".")) || 0;
+    els.balance.textContent = formatCoins(currentBalance + rewardPerClick);
+    haptic("light"); spawnRing(); coinBurst(els.coinBtn, "+" + formatCoins(rewardPerClick)); render();
+    pendingClicks += 1; clearTimeout(flushTimer);
+    if (pendingClicks >= 15) flush(); else flushTimer = setTimeout(flush, 900);
+  }
+  async function flush() {
+    if (pendingClicks === 0) return;
+    const count = pendingClicks; pendingClicks = 0;
+    try {
+      const res = await api.sendClicks(count);
+      baseEnergy = res.energy; anchorTime = new Date(res.energy_updated_at).getTime();
+      els.balance.textContent = formatCoins(res.balance);
+      updateHeaderBalance(res.balance);
+      render();
+    } catch (e) { pendingClicks += count; toast("Не удалось синхронизировать клики.", "error"); }
+  }
+  els.coinBtn.addEventListener("click", handleClick);
+  function onVisibilityChange() { if (document.hidden) flush(); }
+  window.addEventListener("visibilitychange", onVisibilityChange);
+
+  return () => { clearInterval(tickTimer); clearInterval(resyncTimer); clearTimeout(flushTimer); window.removeEventListener("visibilitychange", onVisibilityChange); flush(); };
+}
+
+routes.profile = { mount: mountProfile };
+let profileActiveTab = "created";
+async function mountProfile(container) {
+  const user = await api.getMe();
+  container.innerHTML =
+    '<div class="profile-header">' + avatarHtml(user) +
+      '<div><div class="profile-name">' + escapeHtml(user.first_name) + '</div>' +
+      '<div class="profile-username">' + (user.username ? "@" + escapeHtml(user.username) : "Telegram ID: " + user.telegram_id) + '</div></div>' +
+    '</div>' +
+    '<div class="stats-grid">' +
+      '<div class="stat-box"><div class="stat-box__value">🪙 ' + formatCoins(user.balance) + '</div><div class="stat-box__label">Баланс</div></div>' +
+      '<div class="stat-box"><div class="stat-box__value">' + formatCoins(user.total_earned) + '</div><div class="stat-box__label">Всего заработано</div></div>' +
+      '<div class="stat-box"><div class="stat-box__value">' + user.tasks_completed + '</div><div class="stat-box__label">Заданий выполнено</div></div>' +
+      '<div class="stat-box"><div class="stat-box__value">' + user.tasks_created + '</div><div class="stat-box__label">Заданий создано</div></div>' +
+    '</div>' +
+    '<div class="flex gap-8" style="margin-top:14px;">' +
+      '<button id="btn-invite" class="btn btn-secondary btn-block">🎁 Пригласить друга</button>' +
+      '<button id="btn-history" class="btn btn-ghost btn-block">🕘 История</button>' +
+    '</div>' +
+    '<div class="tabs">' +
+      '<div class="tab ' + (profileActiveTab === "created" ? "tab--active" : "") + '" data-tab="created">Мои задания</div>' +
+      '<div class="tab ' + (profileActiveTab === "submissions" ? "tab--active" : "") + '" data-tab="submissions">Мои заявки</div>' +
+    '</div>' +
+    '<div id="profile-tab-content">' + renderSkeletonCards(2) + '</div>';
+
+  container.querySelector("#btn-invite").addEventListener("click", () => {
+    const link = "https://t.me/your_bot?start=ref_" + user.telegram_id;
+    const text = "Присоединяйся к PinShare — выполняй задания и зарабатывай монеты! 🪙";
+    openTelegramLink("https://t.me/share/url?url=" + encodeURIComponent(link) + "&text=" + encodeURIComponent(text));
+  });
+  container.querySelector("#btn-history").addEventListener("click", () => navigate("history"));
+  container.querySelectorAll(".tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      profileActiveTab = tab.dataset.tab;
+      container.querySelectorAll(".tab").forEach((t) => t.classList.remove("tab--active"));
+      tab.classList.add("tab--active");
+      renderProfileTab(container);
+    });
+  });
+  await renderProfileTab(container);
+}
+async function renderProfileTab(container) {
+  const contentEl = container.querySelector("#profile-tab-content");
+  contentEl.innerHTML = renderSkeletonCards(2);
+  if (profileActiveTab === "created") {
+    try {
+      const tasks = await api.getMyCreatedTasks();
+      const incoming = await api.getIncomingSubmissions();
+      if (!tasks.length) { contentEl.innerHTML = emptyState("🗂", "Вы ещё не создавали заданий", "Нажмите «Создать» на главной, чтобы запустить первое задание"); return; }
+      contentEl.innerHTML = tasks.map((t) => renderMyTaskCard(t)).join("");
+      contentEl.querySelectorAll("[data-review-task]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const task = tasks.find((t) => t.id === btn.dataset.reviewTask);
+          const subs = incoming.filter((s) => s.task_id === task.id);
+          openModerationSheet(task, subs, () => renderProfileTab(container));
+        });
+      });
+      contentEl.querySelectorAll("[data-cancel-task]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const ok = await showConfirm("Отменить задание? Неиспользованные монеты вернутся на баланс.");
+          if (!ok) return;
+          try {
+            await api.cancelTask(btn.dataset.cancelTask);
+            const me = await api.getMe();
+            updateHeaderBalance(me.balance);
+            toast("Задание отменено, монеты возвращены", "success");
+            renderProfileTab(container);
+          } catch (e) { toast(e.message, "error"); }
+        });
+      });
+    } catch (e) { contentEl.innerHTML = emptyState("⚠️", "Ошибка загрузки", e.message); }
+  } else {
+    try {
+      const submissions = await api.getMySubmissions();
+      if (!submissions.length) { contentEl.innerHTML = emptyState("📨", "Вы ещё не выполняли заданий", "Перейдите в раздел «Задания», чтобы начать зарабатывать"); return; }
+      contentEl.innerHTML = submissions.map((s) => renderSubmissionCard(s)).join("");
+    } catch (e) { contentEl.innerHTML = emptyState("⚠️", "Ошибка загрузки", e.message); }
+  }
+}
+function renderMyTaskCard(t) {
+  const statusLabels = { active: "Активно", paused: "Пауза", completed: "Завершено", cancelled: "Отменено" };
+  return '<div class="task-card"><div class="task-card__top"><div class="task-card__icon">' + (t.category_icon || "✨") + '</div>' +
+    '<div class="task-card__body"><div class="task-card__category">' + escapeHtml(t.category_name || "") + '</div>' +
+    '<div class="task-card__title">' + escapeHtml(t.title) + '</div>' +
+    '<div class="task-card__desc">Слотов осталось: ' + t.slots_left + '/' + t.slots_total + ' · Награда 🪙' + formatCoins(t.reward) + '</div></div></div>' +
+    '<div class="task-card__bottom"><span class="status-chip status-chip--' + t.status + '">' + (statusLabels[t.status] || t.status) + '</span>' +
+    '<div class="flex gap-8">' +
+      (t.pending_submissions > 0 ? '<button class="btn btn-primary btn-sm" data-review-task="' + t.id + '">Проверить (' + t.pending_submissions + ')</button>' : "") +
+      ((t.status === "active" || t.status === "paused") ? '<button class="btn btn-danger btn-sm" data-cancel-task="' + t.id + '">Отменить</button>' : "") +
+    '</div></div></div>';
+}
+function renderSubmissionCard(s) {
+  const statusLabels = { pending: "На проверке", approved: "Одобрено", rejected: "Отклонено" };
+  return '<div class="task-card"><div class="task-card__top"><div class="task-card__icon">📨</div>' +
+    '<div class="task-card__body"><div class="task-card__category">Заявка · ' + timeAgo(s.submitted_at) + '</div>' +
+    '<div class="task-card__title">' + escapeHtml(s.task_title) + '</div>' +
+    '<div class="task-card__desc">Награда: 🪙 ' + formatCoins(s.task_reward) + '</div></div></div>' +
+    '<div class="task-card__bottom"><span class="status-chip status-chip--' + s.status + '">' + statusLabels[s.status] + '</span></div></div>';
+}
+function openModerationSheet(task, submissions, onDone) {
+  const pending = submissions.filter((s) => s.status === "pending");
+  openSheet(
+    '<div class="h2" style="margin-bottom:14px;">Заявки: ' + escapeHtml(task.title) + '</div>' +
+    '<div id="moderation-list">' +
+    (pending.length
+      ? pending.map((s) =>
+        '<div class="card" style="margin-bottom:10px; box-shadow:none; background:var(--surface-soft);" data-sub-id="' + s.id + '">' +
+          '<div class="flex items-center gap-12" style="margin-bottom:10px;">' + avatarHtml({ first_name: s.performer_username || "?", avatar_url: s.performer_avatar }, 40) +
+          '<div><div style="font-weight:700; font-size:13.5px;">' + (s.performer_username ? "@" + escapeHtml(s.performer_username) : "Пользователь") + '</div>' +
+          '<div class="text-muted" style="font-size:11.5px;">' + timeAgo(s.submitted_at) + '</div></div></div>' +
+          (s.proof_comment ? '<p style="font-size:13px; margin:0 0 8px;">💬 ' + escapeHtml(s.proof_comment) + '</p>' : "") +
+          (s.proof_url ? '<p style="font-size:13px; margin:0 0 10px; word-break:break-all;">🔗 ' + escapeHtml(s.proof_url) + '</p>' : "") +
+          '<div class="flex gap-8"><button class="btn btn-success btn-sm btn-block" data-approve="' + s.id + '">✅ Принять</button>' +
+          '<button class="btn btn-danger btn-sm btn-block" data-reject="' + s.id + '">❌ Отклонить</button></div></div>'
+        ).join("")
+      : '<div class="empty-state" style="padding:30px 10px;"><div class="empty-state__icon">✅</div><div class="empty-state__text">Все заявки обработаны</div></div>') +
+    '</div>'
+  );
+  sheetContentEl.querySelectorAll("[data-approve]").forEach((btn) => btn.addEventListener("click", () => reviewSubmission(btn.dataset.approve, "approve", onDone)));
+  sheetContentEl.querySelectorAll("[data-reject]").forEach((btn) => btn.addEventListener("click", () => reviewSubmission(btn.dataset.reject, "reject", onDone)));
+}
+async function reviewSubmission(id, action, onDone) {
+  try {
+    if (action === "approve") await api.approveSubmission(id); else await api.rejectSubmission(id);
+    haptic(action === "approve" ? "success" : "medium");
+    toast(action === "approve" ? "Заявка одобрена, монеты начислены" : "Заявка отклонена", "success");
+    closeSheet();
+    if (onDone) onDone();
+  } catch (e) { toast(e.message, "error"); }
+}
+
+routes.rating = { mount: mountRating };
+async function mountRating(container) {
+  container.innerHTML = renderSkeletonCards(4);
+  let list;
+  try { list = await api.getRating(); } catch (e) { container.innerHTML = emptyState("⚠️", "Не удалось загрузить рейтинг", e.message); return; }
+  if (!list.length) { container.innerHTML = emptyState("🏆", "Рейтинг пока пуст", "Начните выполнять задания, чтобы попасть в топ!"); return; }
+  const top3 = list.slice(0, 3);
+  const rest = list.slice(3);
+  const order = [top3[1], top3[0], top3[2]].filter(Boolean);
+  container.innerHTML = (order.length ? '<div class="podium">' + order.map(podiumSlot).join("") + '</div>' : "") +
+    '<div id="rating-list">' + rest.map(ratingRow).join("") + '</div>';
+}
+function podiumSlot(user) {
+  const initial = (user.first_name || user.username || "?").charAt(0).toUpperCase();
+  return '<div class="podium-slot podium-slot--' + user.rank + '">' +
+    (user.avatar_url ? '<img class="podium-slot__avatar" src="' + user.avatar_url + '" alt="" />' : '<div class="podium-slot__avatar">' + initial + '</div>') +
+    '<div class="podium-slot__name">' + escapeHtml(user.username ? "@" + user.username : user.first_name) + '</div>' +
+    '<div class="podium-slot__coins">🪙 ' + formatCoins(user.total_earned) + '</div>' +
+    '<div class="podium-slot__bar">' + user.rank + '</div></div>';
+}
+function ratingRow(user) {
+  const initial = (user.first_name || user.username || "?").charAt(0).toUpperCase();
+  return '<div class="rating-row ' + (user.is_me ? "rating-row--me" : "") + '">' +
+    '<div class="rating-row__rank">' + user.rank + '</div>' +
+    (user.avatar_url ? '<img class="rating-row__avatar" src="' + user.avatar_url + '" alt="" />' : '<div class="rating-row__avatar">' + initial + '</div>') +
+    '<div><div class="rating-row__name">' + escapeHtml(user.username ? "@" + user.username : user.first_name) + (user.is_me ? " (вы)" : "") + '</div>' +
+    '<div class="rating-row__sub">' + user.tasks_completed + ' заданий выполнено</div></div>' +
+    '<div class="rating-row__coins">🪙 ' + formatCoins(user.total_earned) + '</div></div>';
+}
+
+routes.history = { mount: mountHistory };
+let historyActiveTab = "coins";
+async function mountHistory(container) {
+  container.innerHTML =
+    '<div class="tabs"><div class="tab ' + (historyActiveTab === "coins" ? "tab--active" : "") + '" data-tab="coins">Монеты</div>' +
+    '<div class="tab ' + (historyActiveTab === "tasks" ? "tab--active" : "") + '" data-tab="tasks">Задания</div></div>' +
+    '<div class="card" id="history-content" style="padding: 6px 14px;">' + renderSkeletonCards(1) + '</div>';
+  container.querySelectorAll(".tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      historyActiveTab = tab.dataset.tab;
+      container.querySelectorAll(".tab").forEach((t) => t.classList.remove("tab--active"));
+      tab.classList.add("tab--active");
+      renderHistoryContent(container);
+    });
+  });
+  await renderHistoryContent(container);
+  showBackButton(() => navigate("profile"));
+  return () => hideBackButton();
+}
+async function renderHistoryContent(container) {
+  const el = container.querySelector("#history-content");
+  el.innerHTML = renderSkeletonCards(1);
+  if (historyActiveTab === "coins") {
+    try {
+      const history = await api.getMyHistory();
+      if (!history.length) { el.innerHTML = emptyState("🕘", "История пуста", "Здесь появятся все начисления и списания монет"); return; }
+      el.innerHTML = history.map(transactionRow).join("");
+    } catch (e) { el.innerHTML = emptyState("⚠️", "Ошибка загрузки", e.message); }
+  } else {
+    try {
+      const submissions = await api.getMySubmissions();
+      if (!submissions.length) { el.innerHTML = emptyState("📨", "Пока нет выполненных заданий", "Выполните первое задание в разделе «Задания»"); return; }
+      el.innerHTML = submissions.map(submissionRow).join("");
+    } catch (e) { el.innerHTML = emptyState("⚠️", "Ошибка загрузки", e.message); }
+  }
+}
+function transactionRow(t) {
+  const h = historyIcon(t.type);
+  const positive = t.amount >= 0;
+  return '<div class="history-row"><div class="history-row__icon" style="background:' + h.bg + ';">' + h.icon + '</div>' +
+    '<div class="history-row__body"><div class="history-row__title">' + escapeHtml(historyLabel(t.type)) + '</div>' +
+    '<div class="history-row__time">' + timeAgo(t.created_at) + (t.comment ? " · " + escapeHtml(t.comment) : "") + '</div></div>' +
+    '<div class="history-row__amount ' + (positive ? "history-row__amount--pos" : "history-row__amount--neg") + '">' + formatCoinsSigned(t.amount) + '</div></div>';
+}
+function submissionRow(s) {
+  const statusMap = { pending: { icon: "⏳", bg: "var(--warning-soft)", label: "На проверке" }, approved: { icon: "✅", bg: "var(--success-soft)", label: "Одобрено" }, rejected: { icon: "❌", bg: "var(--danger-soft)", label: "Отклонено" } };
+  const st = statusMap[s.status];
+  return '<div class="history-row"><div class="history-row__icon" style="background:' + st.bg + ';">' + st.icon + '</div>' +
+    '<div class="history-row__body"><div class="history-row__title">' + escapeHtml(s.task_title) + '</div>' +
+    '<div class="history-row__time">' + st.label + ' · ' + timeAgo(s.submitted_at) + '</div></div>' +
+    '<div class="history-row__amount ' + (s.status === "approved" ? "history-row__amount--pos" : "") + '">🪙 ' + formatCoins(s.task_reward) + '</div></div>';
+}
+
+// ---------------------------------------------------------------------
+// 7. Bootstrap
+// ---------------------------------------------------------------------
+function wireBottomNav() {
+  document.querySelectorAll(".nav-item[data-route]").forEach((btn) => btn.addEventListener("click", () => navigate(btn.dataset.route)));
+}
+function wireHeaderBack() {
+  document.getElementById("header-back").addEventListener("click", () => { window.history.length > 1 ? window.history.back() : navigate("home"); });
+}
+window.addEventListener("hashchange", () => {
+  const route = window.location.hash.replace("#", "") || "home";
+  if (route !== currentRoute) navigate(route);
+});
+window.addEventListener("pinshare:balance-changed", async () => {
+  const me = await api.getMe();
+  updateHeaderBalance(me.balance);
+});
+
+(function bootstrap() {
+  initTelegram();
+  wireBottomNav();
+  wireHeaderBack();
+  if (!isInsideTelegram) document.getElementById("demo-badge").classList.remove("hidden");
+  api.getMe().then((user) => {
+    updateHeaderBalance(user.balance);
+    const initial = window.location.hash.replace("#", "") || "home";
+    navigate(initial);
+  });
+})();
+</script>
+</body>
+</html>
