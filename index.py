@@ -7,9 +7,12 @@ SQLite (которая не подходит для serverless — файлов�
 (Postgres) как база данных.
 
 НАСТРОЙКА:
-  1. Создайте проект на supabase.com, в SQL Editor выполните запрос
-     из файла supabase_schema.sql (лежит рядом в репозитории).
-  2. В настройках проекта Supabase (Settings → API) скопируйте:
+  1. Используем уже существующий проект Supabase — peredatsha (не
+     создаём новый, чтобы не упереться в лимит бесплатного плана).
+     В этом проекте, в SQL Editor, выполните запрос из файла
+     supabase_schema.sql — он создаст отдельную таблицу
+     pinshare_connections, никак не пересекающуюся с тем, что там уже есть.
+  2. В настройках проекта peredatsha (Settings → API) скопируйте:
        - Project URL          -> переменная окружения SUPABASE_URL
        - service_role key     -> переменная окружения SUPABASE_SERVICE_KEY
      (именно service_role, а не anon — иначе запись будет блокироваться
@@ -69,7 +72,7 @@ def tg_api(method, **params):
 def connect_start():
     """Сайт вызывает это, чтобы получить одноразовую ссылку на бота."""
     token = uuid.uuid4().hex[:12]
-    db().table("connections").insert(
+    db().table("pinshare_connections").insert(
         {"token": token, "status": "pending", "created_at": time.time()}
     ).execute()
     bot_link = f"https://t.me/{BOT_USERNAME}?start={token}"
@@ -80,7 +83,7 @@ def connect_start():
 def connect_status():
     """Сайт опрашивает это, пока ждёт подтверждения в Telegram."""
     token = request.args.get("token", "")
-    res = db().table("connections").select("*").eq("token", token).limit(1).execute()
+    res = db().table("pinshare_connections").select("*").eq("token", token).limit(1).execute()
     row = res.data[0] if res.data else None
 
     if not row:
@@ -107,7 +110,7 @@ def avatar(tg_id):
     """Проксирует аватарку из Telegram, не раскрывая токен бота клиенту."""
     res = (
         db()
-        .table("connections")
+        .table("pinshare_connections")
         .select("photo_file_id")
         .eq("tg_id", tg_id)
         .not_.is_("photo_file_id", "null")
@@ -153,7 +156,7 @@ def telegram_webhook():
         )
         return jsonify({"ok": True})
 
-    res = db().table("connections").select("*").eq("token", token).limit(1).execute()
+    res = db().table("pinshare_connections").select("*").eq("token", token).limit(1).execute()
     row = res.data[0] if res.data else None
 
     if not row:
@@ -175,7 +178,7 @@ def telegram_webhook():
     except Exception:
         pass
 
-    db().table("connections").update(
+    db().table("pinshare_connections").update(
         {
             "status": "connected",
             "tg_id": from_user.get("id"),
