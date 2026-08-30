@@ -103,9 +103,9 @@ button{font-family:inherit;border:none;background:0 0;cursor:pointer;color:inher
     </button>
   </div>
 
-  <p class=hint>
+  <p class=hint id=hint-text>
     <svg viewBox="0 0 24 24" fill=none aria-hidden=true><path d="M4 12a8 8 0 0 1 13.6-5.7M20 12a8 8 0 0 1-13.6 5.7" stroke="rgba(255,255,255,.75)" stroke-width=2 stroke-linecap=round/><path d="M17 3v4h-4M7 21v-4h4" stroke="rgba(255,255,255,.75)" stroke-width=2 stroke-linecap=round stroke-linejoin=round/></svg>
-    Вход и регистрация — через ваш аккаунт Telegram
+    <span id=hint-label>Вход и регистрация — через ваш аккаунт Telegram</span>
   </p>
 </div>
 <p class=footnote>Нажимая «Зарегистрироваться», вы принимаете правила PinShare</p>
@@ -113,7 +113,6 @@ button{font-family:inherit;border:none;background:0 0;cursor:pointer;color:inher
 
 <script>
 "use strict";
-const STORAGE_KEY="pinshare_demo_v1";
 const T=window.Telegram&&window.Telegram.WebApp?window.Telegram.WebApp:null;
 
 function initTelegram(){
@@ -130,9 +129,6 @@ function haptic(kind){
 function getTelegramUser(){
   return (T&&T.initDataUnsafe&&T.initDataUnsafe.user)||null;
 }
-function hasAccount(){
-  try{return !!localStorage.getItem(STORAGE_KEY)}catch(e){return false}
-}
 
 let toastHost=null;
 function toast(msg,type){
@@ -145,51 +141,102 @@ function toast(msg,type){
   setTimeout(()=>{el.classList.remove("toast--visible");setTimeout(()=>el.remove(),300)},2800);
 }
 
-function setBusy(btn,labelEl,busyText){
+function setBusy(btn,busyText){
+  const label=btn.querySelector("span");
   btn.dataset.originalHtml=btn.innerHTML;
   btn.disabled=true;
-  labelEl.textContent=busyText;
   const icon=btn.querySelector("svg");
   if(icon)icon.outerHTML='<span class="spinner"></span>';
+  label.textContent=busyText;
 }
 function clearBusy(btn){
   if(btn.dataset.originalHtml){btn.innerHTML=btn.dataset.originalHtml;delete btn.dataset.originalHtml}
   btn.disabled=false;
+}
+function setHint(text){
+  document.getElementById("hint-label").textContent=text;
 }
 
 function goToApp(){
   window.location.href="index.html";
 }
 
-function authenticateViaTelegram(mode){
-  // mode: "register" | "login"
-  const btn=mode==="register"?document.getElementById("btn-register"):document.getElementById("btn-login");
-  const label=mode==="register"?document.getElementById("register-label"):document.getElementById("login-label");
-  const originalText=label.textContent;
+const CONNECTED_USER_KEY="pinshare_tg_user";
+const POLL_INTERVAL_MS=1500;
+const POLL_TIMEOUT_MS=3*60*1000;
 
-  if(mode==="login"&&!hasAccount()){
-    haptic("warning");
-    toast("Аккаунт не найден. Нажмите «Зарегистрироваться», чтобы создать его через Telegram","error");
+let pollTimer=null;
+function stopPolling(){
+  if(pollTimer){clearInterval(pollTimer);pollTimer=null}
+}
+
+async function startConnectFlow(mode){
+  // mode: "register" | "login" — обе кнопки ведут к одному и тому же
+  // подключению аккаунта через Telegram, отличается только текст
+  const btnRegister=document.getElementById("btn-register");
+  const btnLogin=document.getElementById("btn-login");
+  const activeBtn=mode==="register"?btnRegister:btnLogin;
+  const otherBtn=mode==="register"?btnLogin:btnRegister;
+
+  setBusy(activeBtn,"Открываем Telegram…");
+  otherBtn.disabled=true;
+
+  let data;
+  try{
+    const res=await fetch("/api/connect/start",{method:"POST"});
+    if(!res.ok)throw new Error("bad status");
+    data=await res.json();
+  }catch(err){
+    clearBusy(activeBtn);
+    otherBtn.disabled=false;
+    toast("Не удалось связаться с сервером PinShare. Попробуйте ещё раз","error");
     return;
   }
 
-  setBusy(btn,label,mode==="register"?"Создаём аккаунт…":"Входим…");
+  const{token,botLink}=data;
+  window.open(botLink,"_blank")||(window.location.href=botLink);
+  setHint("Ждём подтверждения в Telegram — нажмите Start в чате с ботом");
 
-  setTimeout(()=>{
-    const user=getTelegramUser();
-    if(!user&&!T){
-      // не в Telegram — всё равно пускаем в демо-режиме
+  const startedAt=Date.now();
+  stopPolling();
+  pollTimer=setInterval(async()=>{
+    if(Date.now()-startedAt>POLL_TIMEOUT_MS){
+      stopPolling();
+      clearBusy(activeBtn);
+      otherBtn.disabled=false;
+      setHint("Вход и регистрация — через ваш аккаунт Telegram");
+      toast("Время ожидания истекло. Попробуйте ещё раз","error");
+      return;
     }
-    haptic("success");
-    clearBusy(btn);
-    label.textContent=originalText;
-    toast(mode==="register"?"Аккаунт создан. Добро пожаловать в PinShare!":"Вы вошли в PinShare","success");
-    setTimeout(goToApp,450);
-  },900);
+    try{
+      const res=await fetch("/api/connect/status?token="+encodeURIComponent(token));
+      if(!res.ok)return;
+      const status=await res.json();
+      if(status.status==="connected"){
+        stopPolling();
+        localStorage.setItem(CONNECTED_USER_KEY,JSON.stringify({
+          tgId:status.tgId,
+          username:status.username,
+          firstName:status.firstName,
+          avatarUrl:status.avatarUrl
+        }));
+        haptic("success");
+        clearBusy(activeBtn);
+        toast("Аккаунт подключён, "+(status.firstName||status.username||"друг")+"!","success");
+        setTimeout(goToApp,500);
+      }else if(status.status==="expired"){
+        stopPolling();
+        clearBusy(activeBtn);
+        otherBtn.disabled=false;
+        setHint("Вход и регистрация — через ваш аккаунт Telegram");
+        toast("Ссылка устарела. Нажмите кнопку ещё раз","error");
+      }
+    }catch(err){/* сеть моргнула — пробуем на следующем тике */}
+  },POLL_INTERVAL_MS);
 }
 
-document.getElementById("btn-register").addEventListener("click",()=>authenticateViaTelegram("register"));
-document.getElementById("btn-login").addEventListener("click",()=>authenticateViaTelegram("login"));
+document.getElementById("btn-register").addEventListener("click",()=>startConnectFlow("register"));
+document.getElementById("btn-login").addEventListener("click",()=>startConnectFlow("login"));
 
 initTelegram();
 </script>
