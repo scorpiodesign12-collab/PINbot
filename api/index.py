@@ -77,6 +77,19 @@ def handle_api_error(err):
     return jsonify({"error": err.message}), err.status
 
 
+@app.errorhandler(Exception)
+def handle_unexpected_error(err):
+    """Раньше любая непредвиденная ошибка (обрыв связи с Supabase, тайм-аут
+    на холодном старте serverless-функции и т.п.) приводила к голому 500 без
+    текста, и фронтенд просто показывал "Ошибка сервера (500)" без единой
+    зацепки. Теперь такие ошибки логируются (видно в логах Vercel) и клиенту
+    возвращается понятный JSON, как и остальные ошибки API."""
+    import traceback
+
+    traceback.print_exc()
+    return jsonify({"error": f"Внутренняя ошибка сервера: {err}"}), 500
+
+
 # ---------------------------------------------------------------- авторизация
 
 def current_tg_id():
@@ -544,7 +557,7 @@ def api_submissions_incoming():
     performer_ids = list({s["user_tg_id"] for s in subs})
     performers = {}
     if performer_ids:
-        pr = db().table("pinshare_users").select("tg_id,username,photo_file_id").in_("tg_id", performer_ids).execute()
+        pr = db().table("pinshare_users").select("tg_id,username,first_name,photo_file_id").in_("tg_id", performer_ids).execute()
         performers = {p["tg_id"]: p for p in (pr.data or [])}
 
     result = []
@@ -562,6 +575,7 @@ def api_submissions_incoming():
                 "task_title": t.get("title", "—"),
                 "task_reward": t.get("reward", 0),
                 "performer_username": performer.get("username"),
+                "performer_first_name": performer.get("first_name"),
                 "performer_avatar": f"/api/avatar/{s['user_tg_id']}" if performer.get("photo_file_id") else None,
             }
         )
