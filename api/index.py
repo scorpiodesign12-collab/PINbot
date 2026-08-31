@@ -78,6 +78,17 @@ def handle_api_error(err):
     return jsonify({"error": err.message}), err.status
 
 
+@app.errorhandler(Exception)
+def handle_unexpected_error(err):
+    """Ловит вообще всё, что не ApiError (ошибки Supabase/Postgres,
+    опечатки в коде и т.д.), чтобы вместо голой страницы 'Internal
+    Server Error' клиент получил текст настоящей причины."""
+    import traceback
+
+    traceback.print_exc()
+    return jsonify({"error": f"{type(err).__name__}: {err}"}), 500
+
+
 # ---------------------------------------------------------------- авторизация
 
 def current_tg_id():
