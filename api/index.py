@@ -27,6 +27,7 @@ import base64
 import os
 import time
 import uuid
+from datetime import datetime, timezone
 
 import requests
 from flask import Flask, Response, abort, jsonify, request
@@ -608,7 +609,7 @@ def _review_submission(submission_id, tg_id, approve):
 
     new_status = "approved" if approve else "rejected"
     db().table("pinshare_submissions").update(
-        {"status": new_status, "reviewed_at": "now()"}
+        {"status": new_status, "reviewed_at": datetime.now(timezone.utc).isoformat()}
     ).eq("id", submission_id).execute()
 
     if approve:
