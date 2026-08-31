@@ -667,7 +667,7 @@ def api_balance_add():
     conn = current_tg_id()
     tg_id = conn["tg_id"]
     body = request.get_json(force=True, silent=True) or {}
-    amount = int(body.get("amount") or 0)
+    amount = round(float(body.get("amount") or 0), 2)
     type_ = body.get("type") or "adjustment"
     comment = body.get("comment")
 
@@ -675,13 +675,13 @@ def api_balance_add():
         raise ApiError("Некорректная сумма", 400)
 
     user = ensure_user(conn)
-    new_balance = user.get("balance", 0) + amount
+    new_balance = round(user.get("balance", 0) + amount, 2)
     if new_balance < 0:
         raise ApiError("Недостаточно монет", 402)
 
     patch = {"balance": new_balance}
     if amount > 0 and type_ == "clicker":
-        patch["total_earned"] = user.get("total_earned", 0) + amount
+        patch["total_earned"] = round(user.get("total_earned", 0) + amount, 2)
 
     db().table("pinshare_users").update(patch).eq("tg_id", tg_id).execute()
     log_transaction(tg_id, amount, type_, comment)
