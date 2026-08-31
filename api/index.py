@@ -24,6 +24,7 @@ v3: добавлены реальные бизнес-эндпоинты (зад�
 """
 
 import base64
+import functools
 import os
 import time
 import uuid
@@ -32,6 +33,19 @@ from datetime import datetime, timezone
 import requests
 from flask import Flask, Response, abort, jsonify, request
 from supabase import create_client
+
+try:
+    import httpx
+    TRANSIENT_CONNECTION_ERRORS = (
+        httpx.RemoteProtocolError,
+        httpx.ConnectError,
+        httpx.ReadError,
+        httpx.WriteError,
+        httpx.ConnectTimeout,
+        ConnectionError,
+    )
+except ImportError:  # на всякий случай, если httpx недоступен напрямую
+    TRANSIENT_CONNECTION_ERRORS = (ConnectionError,)
 
 # ====================== НАСТРОЙКИ — БЕРУТСЯ ИЗ ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ======================
 BOT_TOKEN = os.environ.get("PINSHARE_BOT_TOKEN", "")
@@ -58,6 +72,14 @@ def db():
     if _supabase is None:
         _supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     return _supabase
+
+
+def reset_db():
+    """Сбрасывает закэшированный клиент Supabase — используется, когда его
+    сетевое соединение "протухло" (RemoteProtocolError / Server disconnected)
+    из-за того, что serverless-функция вылежалась и Supabase закрыл сокет."""
+    global _supabase
+    _supabase = None
 
 
 def tg_api(method, **params):
@@ -87,6 +109,22 @@ def handle_unexpected_error(err):
 
     traceback.print_exc()
     return jsonify({"error": f"{type(err).__name__}: {err}"}), 500
+
+
+def _retry_on_stale_connection(view_func):
+    """Если закэшированное соединение с Supabase оборвалось (сервер
+    отключился, пока функция "спала" между запросами) — пересоздаём
+    клиент и повторяем запрос один раз, не показывая ошибку пользователю."""
+
+    @functools.wraps(view_func)
+    def wrapper(*args, **kwargs):
+        try:
+            return view_func(*args, **kwargs)
+        except TRANSIENT_CONNECTION_ERRORS:
+            reset_db()
+            return view_func(*args, **kwargs)
+
+    return wrapper
 
 
 # ---------------------------------------------------------------- авторизация
@@ -720,3 +758,11 @@ def api_rating():
             }
         )
     return jsonify(result)
+
+
+# ---------------------------------------------------------------- защита от "протухших" соединений
+# Оборачиваем все зарегистрированные маршруты декоратором ретрая — это
+# делается один раз здесь, а не над каждым @app.route, чтобы не трогать
+# и не дублировать код выше.
+for _endpoint, _view_func in list(app.view_functions.items()):
+    app.view_functions[_endpoint] = _retry_on_stale_connection(_view_func)
