@@ -126,9 +126,6 @@ function haptic(kind){
   if(!h)return;
   ["light","medium","heavy","rigid","soft"].includes(kind)?h.impactOccurred(kind):h.notificationOccurred(kind);
 }
-function getTelegramUser(){
-  return (T&&T.initDataUnsafe&&T.initDataUnsafe.user)||null;
-}
 
 let toastHost=null;
 function toast(msg,type){
@@ -161,7 +158,12 @@ function goToApp(){
   window.location.href="index.html";
 }
 
+// pinshare_tg_user — только для отображения (имя/аватар до первого /api/me).
+// pinshare_session_token — ГЛАВНОЕ: это токен, который прикладывается ко
+// всем запросам как Authorization: Bearer <token>. Именно его отсутствие
+// на другом устройстве/аккаунте означало "не вижу чужие/свои задания".
 const CONNECTED_USER_KEY="pinshare_tg_user";
+const SESSION_TOKEN_KEY="pinshare_session_token";
 const POLL_INTERVAL_MS=1500;
 const POLL_TIMEOUT_MS=3*60*1000;
 
@@ -171,8 +173,6 @@ function stopPolling(){
 }
 
 async function startConnectFlow(mode){
-  // mode: "register" | "login" — обе кнопки ведут к одному и тому же
-  // подключению аккаунта через Telegram, отличается только текст
   const btnRegister=document.getElementById("btn-register");
   const btnLogin=document.getElementById("btn-login");
   const activeBtn=mode==="register"?btnRegister:btnLogin;
@@ -214,6 +214,7 @@ async function startConnectFlow(mode){
       const status=await res.json();
       if(status.status==="connected"){
         stopPolling();
+        localStorage.setItem(SESSION_TOKEN_KEY,token);
         localStorage.setItem(CONNECTED_USER_KEY,JSON.stringify({
           tgId:status.tgId,
           username:status.username,
